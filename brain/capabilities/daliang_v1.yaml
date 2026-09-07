@@ -5,12 +5,13 @@
 device_model: daliang_v1
 form: mobile_service_humanoid
 description: 1.56m 双轮人形商用服务机器人（EGO AGV 底盘 + Android 12 上位机 RK3588）
+locomotion: chassis                  # 唯一具备移动能力的本体；otto/reachy 无此字段 → 移动原语降级
 
 chassis:
   endpoint: ws://192.168.31.7:6060        # 同局域网内可达；MQTT :1883
   connection: client_mode                # 机器人作服务器，网关主动连
   open_level: L4                          # 导航/地图/充电/激光/寄存器全开放（已确认）
-  tools: [navigate, patrol, approach, follow, get_status, stop_all, dock, region]
+  tools: [navigate, patrol, approach, follow, get_status, stop_all, dock, region, add_marker]
   commands_implemented:
     - navigation            # 坐标/点位导航
     - navigationById        # 按命名点位导航
@@ -52,7 +53,7 @@ emotion_mapping:
 # 云端可显式下发的动作原语 → 底盘 MCP 工具（MCP-CONTRACT §2）
 # experience：action_primitive 为空（仅表情意图）时，底盘不动作，expression 交给 companion-app。
 action_primitives:
-  approach:  {tool: self.daliang.approach, params: points}
+  approach:  {tool: self.daliang.approach, params: {marker_id}}
   patrol:    {tool: self.daliang.patrol,   params: {points, loops, speed}}
   navigate:  {tool: self.daliang.navigate, params: {x, y, theta, speed}}
   follow:    {tool: self.daliang.follow,   params: {x, y, t}}

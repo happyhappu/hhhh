@@ -106,6 +106,23 @@ TOOLS = [
             "required": ["op"],
         },
     },
+    {
+        "name": "self.daliang.add_marker",
+        "description": "注册/新增一个命名看护点位（供 approach/patrol 按 id 引用）。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "map_name": {"type": "string"},
+                "name": {"type": "string"},
+                "floor": {"type": "string", "default": "1"},
+                "x": {"type": "number"},
+                "y": {"type": "number"},
+                "t": {"type": "number", "default": 0},
+                "mtype": {"type": "integer", "default": 1},
+            },
+            "required": ["map_name", "name", "x", "y"],
+        },
+    },
 ]
 
 
@@ -117,7 +134,12 @@ async def handle(gateway: Any, tool: str, params: dict) -> Any:
     if tool == "self.daliang.patrol":
         return await c.patrol(params["points"], params.get("count", 1), params.get("speed", 0.7))
     if tool == "self.daliang.approach":
-        return await c.approach(params["points"])
+        # 契约 §2 参数为 {marker_id}；兼容直接传 points 列表
+        if "marker_id" in params:
+            pts = [{"id": params["marker_id"]}]
+        else:
+            pts = params["points"]
+        return await c.approach(pts)
     if tool == "self.daliang.follow":
         return await c.follow(params.get("x", 0), params.get("y", 0), params.get("t", 0))
     if tool == "self.daliang.get_status":
@@ -130,4 +152,7 @@ async def handle(gateway: Any, tool: str, params: dict) -> Any:
         if params.get("op") == "get":
             return await c.get_region()
         return await c.set_region(params.get("id", 0), params.get("polygon", []))
+    if tool == "self.daliang.add_marker":
+        return await c.marker_add(params["map_name"], params["name"], params.get("floor", "1"),
+                                  params["x"], params["y"], params.get("t", 0.0), params.get("mtype", 1))
     raise ValueError(f"unknown tool {tool}")

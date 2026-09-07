@@ -207,7 +207,19 @@ class World:
         self._emit({"cmd": "multiPointCruise_result", "code": P.CRUISE_DEPART, "data": self.cruise["points"][0].get("id")})
 
     def start_event_nav(self, points: list) -> None:
-        self.event_queue = list(points)
+        """points 可直接给 x/y，也可按 marker id 引用（与 start_cruise 一致）。"""
+        resolved = []
+        for p in points:
+            if "x" in p and "y" in p:
+                item = dict(p)
+            else:
+                mid = int(p.get("id", -1))
+                m = self.markers.get(mid)
+                if not m:
+                    raise ValueError(f"marker {mid} not found")
+                item = {"id": mid, "x": m["x"], "y": m["y"], "t": m.get("t", 0.0)}
+            resolved.append(item)
+        self.event_queue = resolved
         self.mode = "event_nav"
         self.goalfinish = P.GOAL_RUNNING
         self._set_target_from_point(self.event_queue[0])
