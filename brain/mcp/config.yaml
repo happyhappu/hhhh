@@ -1,0 +1,27 @@
+# 岁悦大脑 MCP server 启动配置
+# xiaozhi-esp32-server 集成时通过 --config 指向本文件。
+#
+# devices 描述启动时注册进 SuiyueBrain 的本体：
+#   provider: static  —— StaticProvider 模拟固件（ottoreachy 未接真机时，仅按能力注册表解析意图）
+#   provider: daliang —— DaliangOrchestrator 实时驱动大亮底盘（chassis.url 可达则直连真机）
+#
+# 注意：daliang.chassis.url 不可达时 server 不会崩溃，仅 self.daliang.* 调用返回错误。
+#       本地联调可把 url 指向底盘模拟器，例如 ws://127.0.0.1:6060（见 README 的 mock 段）。
+
+brain:
+  default_device: all
+
+devices:
+  - device_id: otto-01
+    model: otto_v1
+    provider: static            # 演示/未烧录固件：按能力注册表解析（不真正执行）
+
+  - device_id: reachy-01
+    model: reachy_mini_v1
+    provider: static
+
+  - device_id: daliang-01
+    model: daliang_v1
+    provider: daliang
+    chassis:
+      url: ws://192.168.31.7:6060   # 真机局域网地址；演示可改 ws://127.0.0.1:PORT（连 mock）
