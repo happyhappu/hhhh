@@ -1,0 +1,21 @@
+岁悦 SuiYue
+Copyright 2026 岁悦项目组
+
+本产品包含以下上游开源项目的代码（均为 MIT License）：
+
+- xiaozhi-esp32 — https://github.com/78/xiaozhi-esp32
+  Copyright (c) 78 & xiaozhi-esp32 contributors
+  用途：Otto 线固件基线（main/boards/otto-robot 板级支持）
+
+- py-xiaozhi — https://github.com/huangjunsen0406/py-xiaozhi
+  Copyright (c) 2025 Junsen
+  用途：Reachy Mini 线 Python 端侧客户端基线
+
+- xiaozhi-esp32-server — https://github.com/xinnan-tech/xiaozhi-esp32-server
+  Copyright (c) xinnan-tech & contributors
+  用途：云端大脑基线
+
+以上项目许可证全文见各上游仓库 LICENSE 文件。
+
+另：OpenDeskBot（小歪机器人，硬件 CERN-OHL-S 2.0 / 软件 GPL-3.0）仅作设计参考，
+本项目未复制其任何代码——见 docs/adr/ADR-003。

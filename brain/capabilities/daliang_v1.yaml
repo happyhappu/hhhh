@@ -1,0 +1,30 @@
+# 能力注册表：daliang_v1
+# 底盘部分接口已齐（易行 EGO L4）；表现层（听/说/看/表情）待尽调函回复定分支（ADR-009）。
+
+device_model: daliang_v1
+form: mobile_service_humanoid
+description: 1.56m 双轮人形商用服务机器人（EGO AGV 底盘 + Android 12 上位机 RK3588）
+
+chassis:                          # 由 daliang/chassis-gateway 提供的 MCP 工具
+  endpoint: ws://192.168.31.7:6060        # 同局域网内可达；MQTT :1883
+  tools: [navigate, patrol, approach, follow, get_status, stop_all, dock, region]
+  notable:
+    - multiPointCruise（带到达回调）→ 定时巡游看护
+    - eventNavigation + incidentRelease → 走到老人身边停下说话
+    - region 虚拟墙 → geofence（卧室/卫生间禁入）
+    - softScram 软急停 → stop_all
+
+expression:                       # ⛔ 待尽调（Plan B 分支）
+  status: blocked_pending_vendor_reply
+  plan_b1: companion-app 标准安卓 API（AudioRecord/Camera2/Presentation）
+  plan_b3: 外挂 SBC 交互头（跑 reachy 同款 Python 栈）
+
+emotion_mapping:                  # B1/B3 确定后补全；先给骨架
+  happy:     {expression: eye_smile, motion: antenna_or_head_up}
+  soothing:  {expression: soft_blink, motion: head_slow_nod}
+  neutral:   {expression: idle}
+
+safety:
+  geofence_required: true
+  emergency_tool: self.daliang.stop_all
+  speed_limit_mps: 0.7            # 常规限速（最大 1.2 仅调试用）

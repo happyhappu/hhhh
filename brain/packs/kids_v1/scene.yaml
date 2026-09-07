@@ -1,0 +1,18 @@
+# 场景包：kids_v1（小学生场景 PoC）
+
+> 定位（ADR-007）：**只验证场景切换机制**，不做完整未成年人合规、不做家长端。
+> 合规体系（内容审核/防沉迷/监护人同意）= 产品化阶段独立立项，课程第 13 讲讨论题。
+
+scene_pack: kids_v1
+version: 0.0.1
+status: poc_slot_only
+
+poc_agents:
+  - homework_companion   # 作业陪伴：番茄钟 + 鼓励话术
+  - why_why_why         # 十万个为什么：知识问答（本地 RAG）
+
+safety:                   # ⚠️ 与 elder_cn_v1 完全重写，禁止复用
+  hard_rules:
+    - 内容适龄过滤（本期仅本地词表实现）
+    - 防沉迷：连续使用 40 分钟触发休息话术
+    - 不采集任何个人信息，画像功能整体禁用

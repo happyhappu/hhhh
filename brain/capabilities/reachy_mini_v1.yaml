@@ -1,0 +1,33 @@
+# 能力注册表：reachy_mini_v1
+
+device_model: reachy_mini_v1
+form: desktop_expressive
+description: 28cm 桌面表达机器人（Pollen/HF Reachy Mini Wireless，自带树莓派 5）
+software: suiyue-client-py
+transport: xiaozhi_websocket
+channels: [audio_in, audio_out, action, screen]
+
+hardware:
+  head: 6-DOF（含 360° 底座旋转）
+  antennas: 2 根动效天线
+  eyes: LED 眼（情感与注视——它就是"脸"）
+  mic: 4 麦阵列
+  extra_screen: 4.3-5" HDMI 胸前内容屏（LED 眼管情感，屏管内容，两者分工不冲突）
+
+action_space:
+  expressive:
+    - head_tilt / head_nod / head_shake / head_turn
+    - antenna_waggle / antenna_perk
+    - eye_pattern: [smile, blink, surprised, concerned]
+    - body_rotate
+
+emotion_mapping:
+  happy:     {head: up, antenna: waggle, eyes: smile}
+  soothing:  {head: slow_nod, antenna: relaxed, eyes: soft_blink}
+  curious:   {head: tilt, antenna: perk, eyes: wide}
+  concerned: {head: lower, antenna: droop, eyes: concerned}
+  neutral:   {head: home, antenna: home, eyes: idle_blink}
+
+screen:
+  ui: ../../../client-py 的本地 Web 模板（适老化大字）
+  role: 内容区（健康要点/教程/照片），不承担情感表达

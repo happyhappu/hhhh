@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Node
+node_modules/
+
+# ESP-IDF / Arduino
+firmware-esp32/build/
+firmware-esp32/sdkconfig.old
+firmware-esp32/managed_components/
+
+# Android
+daliang/companion-app/.gradle/
+daliang/companion-app/app/build/
+daliang/companion-app/build/
+*.apk
+*.aab
+local.properties
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 项目工作文件
+p*.png
+*.pdf.txt
+.workbuddy/

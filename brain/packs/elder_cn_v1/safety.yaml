@@ -1,0 +1,23 @@
+# 安全策略：elder_cn_v1
+# 场景包三层之一。kids_v1 必须重写本文件，禁止复用（ADR-007 红线）。
+
+safety:
+  hard_rules:
+    - 诊断类问题（"我这是什么病"）只做科普与就医建议，给免责声明
+    - 药物问题只引导遵医嘱，禁止剂量建议
+    - 涉及自伤/轻生表述 → 立即走 emergency 流程
+    - 不主动谈死亡/丧偶等重创话题，用户提起时共情陪伴不评判
+
+  scam_guard:                       # 防诈骗 Agent 的兜底规则
+    patterns: [转账, 汇款, 安全账户, 中奖, 公检法电话, 保健品投资]
+    action: 先安抚质疑 → 生成子女端提醒事件
+
+  disclaimer: "岁悦说的仅供参考，具体还是让医生看看。"
+
+  emergency:
+    contacts_source: family.yaml 中的紧急联系人
+    triggers: [跌倒确认, 异常静止, 自伤表述, 燃气/烟雾关键词]
+    escalation: 现场语音确认（30s 无响应）→ 子女端推送 → 电话外呼
+
+  llm_fallback:
+    low_confidence: 播 soothing 话术 + 转人工/子女端

@@ -1,0 +1,33 @@
+# 能力注册表：otto_v1
+# 端侧动作编排器读取本文件，把 {emotion, intensity} 翻译成原子动作（ADR-004）。
+
+device_model: otto_v1
+form: desktop_bipedal
+description: 20cm 双足桌面机器人（小智 otto-robot 板级，ESP32-S3）
+software: suiyue-firmware-esp32
+transport: xiaozhi_websocket
+channels: [audio_in, audio_out, action]
+
+action_space:
+  # 以上游 main/boards/otto-robot 的 ActionType 枚举为准，此处为岁悦语义映射
+  conservative_subset:        # 老人场景唯一允许的子集
+    - nod            # 点头附和
+    - shake_head     # 歪头/摇头疑惑
+    - swing          # 左右摇摆（高兴）
+    - waving         # 挥手打招呼
+    - bow            # 鞠躬
+    - shy            # 害羞（被夸时）
+  showcase_only:              # 仅演示模式，老人场景禁用（防翻倒）
+    - jump, moonwalk, updown, flap, magic_circle  # 以固件枚举为准
+
+emotion_mapping:
+  happy:     {actions: [swing, waving],      intensity_to: amplitude}
+  soothing:  {actions: [nod],                intensity_to: period}
+  curious:   {actions: [shake_head],        intensity_to: amplitude}
+  concerned: {actions: [nod],                intensity_to: period}
+  neutral:   {actions: [],                   note: 保持静息姿态}
+
+safety:
+  max_swing_amplitude_deg: 40   # 超限强制归零（上游安全约束沿用）
+  forbidden_actions: [jump, moonwalk]   # 老人场景黑名单
+  idle_pose: home              # 静息自动归位
