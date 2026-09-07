@@ -1,0 +1,4 @@
+# 大亮底盘网关依赖
+# 使用标准 websockets 库（异步，与大亮真实底盘协议一致）
+websockets>=12.0
+# 测试可选：pytest（不装也能跑 unittest 内置）
