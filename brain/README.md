@@ -11,8 +11,23 @@ brain/
 │   ├── otto_v1.yaml
 │   ├── reachy_mini_v1.yaml
 │   └── daliang_v1.yaml
+├── daliang_provider/        # 大亮本体云端编排层（意图→底盘命令 + 事件桥接）
+│   ├── orchestrator.py      # DaliangOrchestrator（MCP-CONTRACT §1 的大亮实现）
+│   └── test_chassis_orchestrator.py
 └── README.md
 ```
+
+## daliang_provider（新增）
+
+云端"大脑"对大亮本体的编排层，位于 chassis-gateway 与 Agent 之间：
+
+- `DaliangOrchestrator.execute_intent({emotion, intensity, action_primitive, params})`：
+  把 §1 情感意图翻译成 `self.daliang.*` 底盘命令；纯表情意图（无 `action_primitive`）委派给 companion-app，底盘不动作。
+- `DaliangOrchestrator.handle_event(device_event)`：把底盘事件（patrol_arrive / emergency_stop / battery_low ...）翻译成对话上下文提示(nudge)，由 Agent 决定是否进记忆。
+- `tool_schemas()` + `invoke_tool()`：作为 MCP provider 直接挂载到 xiaozhi-esp32-server fork。
+
+依赖 `daliang/chassis-gateway` 的 `daliang_gateway` 包（已与真机协议同构，接真机仅改 url）。
+运行测试：`python -m unittest brain.daliang_provider.test_chassis_orchestrator -v`
 
 ## 开发顺序（不等硬件）
 

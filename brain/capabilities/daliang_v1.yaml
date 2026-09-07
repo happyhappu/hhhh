@@ -1,30 +1,64 @@
 # 能力注册表：daliang_v1
-# 底盘部分接口已齐（易行 EGO L4）；表现层（听/说/看/表情）待尽调函回复定分支（ADR-009）。
+# 底盘部分接口已齐（易行 EGO L4，见 大亮TCP协议.pdf）；表现层（听/说/看/表情）待尽调函回复定分支（ADR-009）。
+# 本文件是 MCP-CONTRACT 的机器可读版，供云端编排器（brain/daliang_provider）读取。
 
 device_model: daliang_v1
 form: mobile_service_humanoid
 description: 1.56m 双轮人形商用服务机器人（EGO AGV 底盘 + Android 12 上位机 RK3588）
 
-chassis:                          # 由 daliang/chassis-gateway 提供的 MCP 工具
+chassis:
   endpoint: ws://192.168.31.7:6060        # 同局域网内可达；MQTT :1883
+  connection: client_mode                # 机器人作服务器，网关主动连
+  open_level: L4                          # 导航/地图/充电/激光/寄存器全开放（已确认）
   tools: [navigate, patrol, approach, follow, get_status, stop_all, dock, region]
-  notable:
-    - multiPointCruise（带到达回调）→ 定时巡游看护
-    - eventNavigation + incidentRelease → 走到老人身边停下说话
-    - region 虚拟墙 → geofence（卧室/卫生间禁入）
-    - softScram 软急停 → stop_all
+  commands_implemented:
+    - navigation            # 坐标/点位导航
+    - navigationById        # 按命名点位导航
+    - multiPointCruise      # 多点循环巡游（到达回调 1000 / 出发 1001 / 完成 0）
+    - eventNavigation       # 走到点位暂停等释放
+    - incidentRelease       # 释放事件导航
+    - remoteControl         # 速度环遥控（跟随）
+    - softScram             # 软急停
+    - charge                # 自动回桩
+    - region                # 虚拟墙 / 减速区
+    - marker                # 点位增删查
+    - getAgvStatus          # 位姿/电量/急停/置信度
+    - getLaser              # 激光原始点云（30m）
+    - getCamera             # 深度点云（非 RGB 图像帧）
+  callbacks:
+    multiPointCruise: {arrive: 1000, depart: 1001, done: 0}
+    eventNavigation: navigation_event   # 到达后暂停，等 incidentRelease
+  safety:
+    emergency_tool: self.daliang.stop_all
+    speed_limit_mps: 0.7                # 常规限速（最大 1.2 仅调试用）
+    geofence: region                    # 卧室/卫生间禁入虚拟墙
 
-expression:                       # ⛔ 待尽调（Plan B 分支）
+# 表现层（听/说/看/表情）：⛔ 待尽调（Plan B 分支）
+expression:
   status: blocked_pending_vendor_reply
+  channels: [screen_main_11_6in, screen_face_5_8in, speaker_10w_x2, mic_array_4_6]
   plan_b1: companion-app 标准安卓 API（AudioRecord/Camera2/Presentation）
-  plan_b3: 外挂 SBC 交互头（跑 reachy 同款 Python 栈）
+  plan_b3: 外挂 SBC 交互头（跑 reachy 同款 Python 栈，与 Q7/Q11 同构）
 
-emotion_mapping:                  # B1/B3 确定后补全；先给骨架
-  happy:     {expression: eye_smile, motion: antenna_or_head_up}
-  soothing:  {expression: soft_blink, motion: head_slow_nod}
-  neutral:   {expression: idle}
+# 情感 → 运动意图（情感-kinesics）。纯表情由 expression 通道处理（待定）。
+# 这里只描述"底盘可表达的动作倾向"，具体参数由 action_primitives 给出。
+emotion_mapping:
+  happy:     {motion: approach_closer, note: "向用户靠近半步表示亲近"}
+  soothing:  {motion: slow_patrol,    note: "缓慢巡游，不打扰"}
+  concerned: {motion: approach_and_wait, note: "走到身边停住，等待对话"}
+  excited:   {motion: approach_closer, note: "靠近并轻微前倾"}
+  neutral:   {motion: none, note: "原地待命"}
 
-safety:
-  geofence_required: true
-  emergency_tool: self.daliang.stop_all
-  speed_limit_mps: 0.7            # 常规限速（最大 1.2 仅调试用）
+# 云端可显式下发的动作原语 → 底盘 MCP 工具（MCP-CONTRACT §2）
+# experience：action_primitive 为空（仅表情意图）时，底盘不动作，expression 交给 companion-app。
+action_primitives:
+  approach:  {tool: self.daliang.approach, params: points}
+  patrol:    {tool: self.daliang.patrol,   params: {points, loops, speed}}
+  navigate:  {tool: self.daliang.navigate, params: {x, y, theta, speed}}
+  follow:    {tool: self.daliang.follow,   params: {x, y, t}}
+  dock:      {tool: self.daliang.dock,     params: {}}
+  stop:      {tool: self.daliang.stop_all, params: {}}
+
+# 编排层实现：brain/daliang_provider/orchestrator.py
+#   - execute_intent({emotion,intensity,action_primitive,params}) → 翻译为 self.daliang.* 调用
+#   - handle_event(device_event) → 对话上下文提示(nudge)，喂给 Agent
