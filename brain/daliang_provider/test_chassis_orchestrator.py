@@ -47,7 +47,7 @@ class TestDaliangOrchestrator(unittest.IsolatedAsyncioTestCase):
         self.server.close()
 
     async def test_tool_schemas_count(self):
-        self.assertEqual(len(self.orch.tool_schemas()), 8)
+        self.assertEqual(len(self.orch.tool_schemas()), 9)
 
     async def test_execute_intent_approach(self):
         res = await self.orch.execute_intent({
