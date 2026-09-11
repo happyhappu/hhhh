@@ -1,0 +1,77 @@
+# 能力注册表：pepper_v1
+# Pepper = SoftBank NAOqi 人形机器人（1.2m / 三轮 / 20 自由度 / 10.1" 平板 / 4 麦 / RGB-D）。
+# 本文件是 MCP-CONTRACT 的机器可读版，供云端编排器读取；端侧由 suiyue/pepper/ 的 NAOqi 网关实现。
+#
+# 关键定位（见 ADR-002 / ADR-011）：
+#   - 机载算力弱（x86 嵌入式级），只作**纯客户端**，不本地跑 LLM → 不增加 4090 显存预算；
+#   - 音频链路走云端 xiaozhi（ASR）+ GPT-SoVITS（TTS 流式下行），Pepper 仅作扬声器/麦克风 I/O；
+#   - **禁用** Pepper 内置 ALSpeechRecognition / ALTextToSpeech / ALDialogue（避免云端依赖与联网），
+#     中文陪伴音色由 4090 上的 GPT-SoVITS 克隆女声承担。
+
+device_model: pepper_v1
+form: mobile_humanoid_naoqi
+description: 1.2m 三轮移动人形（SoftBank Pepper，NAOqi OS，20 自由度，10.1" 平板）
+locomotion: naoqi_wheel            # 三轮全向底盘，max ~0.4 m/s；ALNavigation 拓扑地图导航（非 SLAM 精度）
+software: suiyue-pepper            # NAOqi 桥（Python qi SDK）
+transport:
+  dialogue: xiaozhi_websocket      # 音频/意图走小智协议（与 otto/reachy 同）
+  motion: naoqi_broker             # 动作/导航/平板走 tcp://<pepper-ip>:9559 的 NAOqi broker
+channels: [audio_in, audio_out, action, screen, mobility]
+
+naoqi:
+  broker_url: tcp://192.168.31.<pepper_ip>:9559
+  sdk: qi (Python) / naoqi Python SDK
+  proxies_used:                  # 仅列本系统用到的，其余 NAOqi 服务不动
+    - ALMotion                    # 关节/轮子运动、killAllTasks 急停
+    - ALRobotPosture              # Stand/Sit/Crouch 等预定义姿态
+    - ALAnimationPlayer           # 播放预制动画（挥手/拥抱等）
+    - ALBasicAwareness            # 注视/在场（替代视觉在场门控，可选）
+    - ALNavigation                # 拓扑地图导航（建图需人工）
+    - ALTabletService             # 平板渲染 companion Web UI
+  disabled_cloud_services:        # 离线必须关，见 ADR-011 §决策 4.8
+    - ALSpeechRecognition         # 改走云端 xiaozhi FunASR
+    - ALTextToSpeech              # 改走云端 GPT-SoVITS 流式
+    - ALDialogue                  # 改走云端 Intent Router
+    - 系统遥测 / 自动更新检查       # 关机箱外连 SoftBank，air-gapped 必断
+
+action_space:
+  conservative_subset:            # 老人场景允许子集（其余仅展示模式）
+    - wave               # 挥手打招呼
+    - show_tablet        # 抬手展示平板（配合 screen 通道）
+    - posture_stand      # 站立待命
+    - posture_crouch     # 蹲下（把屏幕降到老人视线高度，共情交互）
+    - head_nod           # 点头附和
+    - head_shake         # 摇头/疑惑
+  showcase_only:
+    - hug, dance, push, tai_chi   # 以 NAOqi 动画库为准
+
+emotion_mapping:
+  happy:     {motion: approach_and_wave, note: "靠近半步 + 挥手"}
+  soothing:  {motion: posture_crouch,     note: "蹲下降低视线高度安抚"}
+  curious:   {motion: head_tilt,         note: "偏头注视"}
+  concerned: {motion: approach_and_wait, note: "走到身边停住等待对话"}
+  excited:   {motion: approach_and_wave, note: "靠近并挥手"}
+  neutral:   {motion: none, note: "原地站立待命"}
+
+# 情感 → 运动意图（情感-kinesics）；纯表情由 screen/audio 通道处理。
+
+# 云端可显式下发的动作原语 → Pepper MCP 工具（MCP-CONTRACT §7）
+action_primitives:
+  approach:  {tool: self.pepper.approach,      params: {marker_id}}
+  navigate:  {tool: self.pepper.navigate,      params: {node, speed}}
+  patrol:    {tool: self.pepper.patrol,        params: {points, loops, speed}}
+  tablet:    {tool: self.pepper.tablet_render, params: {url}}
+  stop:      {tool: self.pepper.stop_all,      params: {}}
+  status:    {tool: self.pepper.get_status,    params: {}}
+
+safety:
+  emergency_tool: self.pepper.stop_all
+  builtin_fall_protection: true     # NAOqi 机身倾斜即切断电机——比大亮多一层硬件兜底
+  watchdog_stop_on_disconnect: true # 与云端/网关断连 > N 秒 → 停运动（仍须有，见 ADR-011 §决策3）
+  speed_limit_mps: 0.4              # 三轮底盘常规限速（最大亦仅 ~0.4 m/s）
+  geofence: naoqi_no_native         # NAOqi 无原生虚拟墙；用 ALNavigation 禁区 + 限速近似
+  forbidden_actions: [hug, dance, push]   # 老人场景黑名单（防碰撞/翻倒）
+  idle_pose: posture_stand
+
+# 编排层实现（规划）：suiyue/pepper/ 网关把 self.pepper.* 翻译为 NAOqi 代理调用；
+# 音频经 xiaozhi WS 上行、TTS 流式经扬声器下行（Pepper 内置 TTS 不启用）。

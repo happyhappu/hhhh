@@ -1,7 +1,7 @@
-"""SuiyueMCPServer：把 SuiyueBrain 暴露为标准 MCP server（一个大脑三个身体）。
+"""SuiyueMCPServer：把 SuiyueBrain 暴露为标准 MCP server（一个大脑四个身体）。
 
 xiaozhi-esp32-server 作为 MCP client 连上本 server 后，LLM 即可通过标准工具调用
-驱动三个本体：
+驱动四个本体：
 
 - self.suiyue.emote        —— 情感意图（核心，云端下发的统一语言）
 - self.suiyue.list_devices —— 列出已注册本体
@@ -45,7 +45,7 @@ _EMOTE_TOOL = {
     "name": "self.suiyue.emote",
     "description": (
         "向岁悦本体下发情感意图。云端只下发 emotion/intensity 与可选 action_primitive，"
-        "具体动作由端侧能力注册表决定（一个大脑三个身体）。device_id 省略或 'all' 时广播给所有本体。"
+        "具体动作由端侧能力注册表决定（一个大脑四个身体）。device_id 省略或 'all' 时广播给所有本体。"
     ),
     "inputSchema": {
         "type": "object",

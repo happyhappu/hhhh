@@ -1,10 +1,10 @@
-"""演示：同一句话，三个身体给出三种不同反应。
+"""演示：同一句话，四个身体给出四种不同反应。
 
 运行（在 suiyue/ 根目录）：
-    python -m brain.core.demo_three_bodies
+    python -m brain.core.demo_four_bodies
 
 无需任何硬件：
-- otto / reachy 用 StaticProvider 模拟固件（按能力注册表解析）；
+- otto / reachy / pepper 用 StaticProvider 模拟固件（按能力注册表解析）；
 - daliang 连本仓自带的底盘模拟器（mock server，与真机协议同构）。
 """
 from __future__ import annotations
@@ -70,10 +70,11 @@ async def main() -> None:
     brain.register("otto-01", "otto_v1")               # 模拟固件
     brain.register("reachy-01", "reachy_mini_v1")      # 模拟固件
     brain.register("daliang-01", "daliang_v1", daliang)  # 实时底盘
+    brain.register("pepper-01", "pepper_v1")              # 模拟固件（NAOqi 网关未起时按注册表解析）
 
     print("注册设备:", brain.device_ids)
 
-    # 场景一：老人讲了个高兴的事 —— 同一句话，三种反应
+    # 场景一：老人讲了个高兴的事 —— 同一句话，四种反应
     intent_happy = {"emotion": "happy", "intensity": 0.8}
     _print_reactions("场景一 · 老人说高兴的事（emotion=happy, intensity=0.8）",
                      await brain.dispatch_emote_all(intent_happy))
@@ -87,7 +88,7 @@ async def main() -> None:
 
     await orch.close()
     server.close()
-    print("\n演示结束。三条本体线在同一意图下给出各自合理的反应，云端零感知差异。")
+    print("\n演示结束。四条本体线在同一意图下给出各自合理的反应，云端零感知差异。")
 
 
 if __name__ == "__main__":

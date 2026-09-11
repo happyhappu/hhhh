@@ -14,25 +14,25 @@ brain/
 ├── daliang_provider/        # 大亮本体云端编排层（意图→底盘命令 + 事件桥接）
 │   ├── orchestrator.py      # DaliangOrchestrator（MCP-CONTRACT §1 的大亮实现）
 │   └── test_chassis_orchestrator.py
-├── core/                    # ★ 统一意图分发中枢（"一个大脑三个身体"云端侧）
+├── core/                    # ★ 统一意图分发中枢（"一个大脑四个身体"云端侧）
 │   ├── capability.py        # 加载 capabilities/<model>.yaml
 │   ├── provider.py          # BodyProvider / StaticProvider（模拟固件）/ DaliangProvider（实时）
 │   ├── brain.py             # SuiyueBrain：按 device_id 路由 emote 意图
-│   ├── demo_three_bodies.py # 一句话三种反应演示（无需硬件）
+│   ├── demo_four_bodies.py # 一句话四种反应演示（无需硬件）
 │   └── test_brain.py
 └── README.md
 ```
 
 ## core（统一分发中枢，新增）
 
-把"一个大脑三个身体"在云端落地：收到一个 `self.suiyue.emote` 意图，`SuiyueBrain` 按各设备
+把"一个大脑四个身体"在云端落地：收到一个 `self.suiyue.emote` 意图，`SuiyueBrain` 按各设备
 的能力注册表翻译成不同具体反应；同一句话，otto / reachy / daliang 给出三种不同表达与动作。
 
 - `StaticProvider`：仅按能力注册表解析意图（ottoreachy 未烧固件时演示/测试用，不真正执行）；
 - `DaliangProvider`：包 `DaliangOrchestrator`，实时驱动大亮底盘；
 - 本体无移动能力时，移动原语静默降级（`degraded=True`，MCP-CONTRACT §6）。
 
-运行演示（无需硬件）：`python -m brain.core.demo_three_bodies`
+运行演示（无需硬件）：`python -m brain.core.demo_four_bodies`
 运行测试：`python -m unittest brain.core.test_brain -v`
 
 ## daliang_provider（新增）

@@ -1,6 +1,6 @@
 # 跨本体 MCP 工具契约（v1）
 
-> 这是"一个大脑三个身体"的宪法。云端与端侧都只认这份契约；改契约必须走 ADR。
+> 这是"一个大脑四个身体"的宪法。云端与端侧都只认这份契约；改契约必须走 ADR。
 
 ## 1. 情感意图（所有本体必须实现）
 
@@ -61,3 +61,21 @@
 
 - 契约版本随 `docs/adr/` 演进，工具新增不破坏旧端；参数变更必须升 major；
 - 端侧收到不认识的原语：静默降级为 `neutral`，不报错打断对话。
+
+## 7. Pepper 端侧（pepper/ 注册）
+
+- `self.pepper.emote`：映射到 20 DOF（ALMotion / ALRobotPosture / ALAnimationPlayer），如 happy → 靠近半步 + 挥手；
+- `self.pepper.navigate` / `self.pepper.approach` / `self.pepper.patrol`：ALNavigation 拓扑导航（精度弱于大亮 SLAM，限速 0.4 m/s）；
+- `self.pepper.tablet_render`：10.1" 平板渲染 companion Web UI（ALTabletService）；
+- `self.pepper.get_status` / `self.pepper.stop_all`：电量/姿态轮询 + 失联急停（ALMotion.killAllTasks + 回 Stand）。
+
+**安全约束**：Pepper 自带防跌倒（机身倾斜即切断电机），失联看门狗仍须停运动；**禁用内置云端 ASR/TTS/Dialogue**（改云端 xiaozhi + GPT-SoVITS）；NAOqi 无原生 geofence，用 ALNavigation 禁区 + 限速近似（见 ARCHITECTURE §6 与 `pepper/README.md`）。
+
+## 7. Pepper 端侧（pepper/ 注册）
+
+- `self.pepper.emote`：映射到 20 DOF（ALMotion / ALRobotPosture / ALAnimationPlayer），如 happy → 靠近半步 + 挥手；
+- `self.pepper.navigate` / `self.pepper.approach` / `self.pepper.patrol`：ALNavigation 拓扑导航（精度弱于大亮 SLAM，限速 0.4 m/s）；
+- `self.pepper.tablet_render`：10.1" 平板渲染 companion Web UI（ALTabletService）；
+- `self.pepper.get_status` / `self.pepper.stop_all`：电量/姿态轮询 + 失联急停（ALMotion.killAllTasks + 回 Stand）。
+
+**安全约束**：Pepper 自带防跌倒（机身倾斜即切断电机），失联看门狗仍须停运动；**禁用内置云端 ASR/TTS/Dialogue**（改云端 xiaozhi + GPT-SoVITS）；NAOqi 无原生 geofence，用 ALNavigation 禁区 + 限速近似（见 ARCHITECTURE §6 与 `pepper/README.md`）。

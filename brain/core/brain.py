@@ -1,6 +1,6 @@
 """SuiyueBrain：云端统一意图分发中枢。
 
-把"一个大脑三个身体"在云端落地：
+把"一个大脑四个身体"在云端落地：
 - 每个在线设备以 device_id 注册，绑定一个 BodyProvider（真实或模拟）；
 - 收到一个 `self.suiyue.emote` 意图后，按设备各自的能力注册表翻译成不同具体反应；
 - 同一句话，otto / reachy / daliang 给出三种不同的、各自合理的表达与动作。
@@ -46,7 +46,7 @@ class SuiyueBrain:
         return await provider.emote(intent)
 
     async def dispatch_emote_all(self, intent: dict) -> dict[str, EmoteResult]:
-        """把同一意图广播给所有已注册设备（"一句话三种反应"演示入口）。"""
+        """把同一意图广播给所有已注册设备（"一句话四种反应"演示入口）。"""
         out: dict[str, EmoteResult] = {}
         for did in self._devices:
             out[did] = await self.dispatch_emote(did, intent)

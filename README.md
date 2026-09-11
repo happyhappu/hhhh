@@ -1,6 +1,6 @@
 # 岁悦 SuiYue — 多形态陪伴机器人开源项目
 
-> 一个软件大脑，三个机器人身体：Otto（桌面双足）、Reachy Mini（桌面表达）、大亮（1.56m 移动人形）。
+> 一个软件大脑，四个机器人身体：Otto（桌面双足）、Reachy Mini（桌面表达）、大亮（1.56m 移动人形）、Pepper（1.2m 移动人形，NAOqi）。
 > 教学载体优先，产品化为远期愿景。首轮场景：居家老人陪伴。
 
 ## 仓库地图
@@ -12,6 +12,8 @@
 | Reachy 端侧 | `client-py/` | Python 端侧客户端（跑在树莓派 5 / Linux SBC） | `huangjunsen0406/py-xiaozhi`（MIT） | Apache-2.0 | 待 fork |
 | 大亮底盘网关 | `daliang/chassis-gateway/` | EGO 底盘 WS/MQTT 协议 → MCP 工具，含 Mock Server | 自研 | Apache-2.0 | 骨架已建 |
 | 大亮上位机 App | `daliang/companion-app/` | Android 原生 Kotlin 表现层 APK | 参考 `xuan2261/xiaozhi-ai-android` | Apache-2.0 | 待尽调后启动 |
+| Pepper 端侧 | `pepper/` | NAOqi 桥（音频/UI/动作/导航 MCP 工具），Python | 自研（naoqi SDK） | Apache-2.0 | 方案已建，待 P0 确认 |
+| Pepper 端侧 | `pepper/` | NAOqi 桥（音频/UI/动作/导航 MCP 工具），Python | 自研（naoqi SDK） | Apache-2.0 | 方案已建，待 P0 确认 |
 | 硬件 | `hardware/` | Otto BOM、Reachy 加屏结构件、外挂交互头（Plan B） | Otto DIY（CERN-OHL-S 兼容） | CERN-OHL-S | 文档 |
 | 课程包 | `course/` | 12+2 讲课程、实验手册、验收标准 | 自研 | CC BY-SA | 大纲已建 |
 | 端到端验收 | `e2e/` | 10 句测试话术、延迟与稳定性指标 | 自研 | CC BY-SA | 骨架已建 |
@@ -26,8 +28,9 @@
 云端大脑 brain/（小智协议 + MCP）
    ├─ Otto      firmware-esp32/   情感→双足动作（<200 行 C++ 映射层）
    ├─ Reachy    client-py/         情感→头颈/天线/LED（Python MCP 工具）
-   └─ 大亮      chassis-gateway/   情感+移动→导航/巡航（纯网络协议）
-                companion-app/     听/说/看/表情（Android，Plan B 可外挂替代）
+   ├─ 大亮      chassis-gateway/   情感+移动→导航/巡航（纯网络协议）
+   │           companion-app/     听/说/看/表情（Android，Plan B 可外挂替代）
+   └─ Pepper    pepper/            NAOqi 桥：音频/UI/动作/导航（Python MCP 工具）
 ```
 
 详见 `docs/ARCHITECTURE.md`；跨本体工具契约见 `docs/MCP-CONTRACT.md`。
@@ -41,7 +44,7 @@
 
 **阶段 1（第 1–4 讲）**：fork 三个上游仓库（各目录 `FORK.md` 有具体命令与改造点），跑通"能听能说能动"，改人设。
 
-**阶段 2（第 5–8 讲）**：自建轻量云端 + 动作语义层落地——同一句话在三台机器人上给出不同动作回应。
+**阶段 2（第 5–8 讲）**：自建轻量云端 + 动作语义层落地——同一句话在四台机器人上给出不同动作回应。
 
 ## Fork 纪律（写给每一届学生）
 

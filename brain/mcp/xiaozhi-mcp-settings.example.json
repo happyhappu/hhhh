@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "SuiyueBrain": {
+      "command": "C:/Users/eddie/.workbuddy/binaries/python/envs/default/Scripts/python.exe",
+      "args": [
+        "-m", "brain.mcp",
+        "--config", "D:/WorkBuddy/桌面陪伴机器人/suiyue/brain/mcp/config.yaml"
+      ],
+      "env": {
+        "PYTHONPATH": "D:/WorkBuddy/桌面陪伴机器人/suiyue"
+      }
+    }
+  }
+}

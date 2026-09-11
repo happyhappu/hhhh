@@ -1,6 +1,6 @@
 # 岁悦系统架构（v1）
 
-> 对应决策：ADR-002（三本体一脑）、ADR-003（小智协议+MCP）、ADR-004（情感意图抽象）、ADR-009（大亮双网关）。
+> 对应决策：ADR-002（四本体一脑）、ADR-003（小智协议+MCP）、ADR-004（情感意图抽象）、ADR-009（大亮双网关）。
 
 ## 1. 总览
 
@@ -15,18 +15,18 @@
                     │      │   / MySQL 结构化画像                 │
                     │      └─ 场景包 packs/elder_cn_v1 ...        │
                     │  能力注册表 capabilities/（device → 能力） │
-                    └───────────────┬────────────────────────────┘
+                    └───────────────┬──────────────┬──────────────┘
                                     │ 小智协议 + MCP
-        ┌───────────────────────────┼───────────────────────────┐
-        │                           │                           │
-┌───────▼────────┐         ┌────────▼────────┐         ┌───────▼────────┐
-│ Otto            │         │ Reachy Mini     │         │ 大亮           │
-│ firmware-esp32/ │         │ client-py/      │         │ chassis-gateway│
-│                │         │                 │         │ + companion-app│
-│ ESP32-S3 固件   │         │ 树莓派5 Python  │         │ 见 §4 拆分     │
-│ {emotion,int.} │         │ {emotion,int.}  │         │ {emotion,int., │
-│ → 双足动作      │         │ → 头/天线/LED   │         │  primitive,params}│
-└────────────────┘         └─────────────────┘         └────────────────┘
+        ┌───────────────────────────┼──────────────┼───────────────────┐
+        │                           │              │                   │
+┌───────▼────────┐    ┌─────────────▼───────┐  ┌──────▼────────┐  ┌───────▼────────┐
+│ Otto            │    │ Reachy Mini          │  │ 大亮           │  │ Pepper           │
+│ firmware-esp32/ │    │ client-py/           │  │ chassis-gateway│  │ pepper/          │
+│                │    │                     │  │ + companion-app│  │ (NAOqi 端侧全栈) │
+│ ESP32-S3 固件   │    │ 树莓派5 Python       │  │ 见 §4 拆分     │  │ 1.2m 三轮人形    │
+│ {emotion,int.} │    │ {emotion,int.}       │  │ {emotion,int., │  │ {emotion,int.,   │
+│ → 双足动作      │    │ → 头/天线/LED        │  │  primitive,params}│  │  primitive,params}│
+└────────────────┘    └─────────────────────┘  └────────────────┘  └────────────────┘
 ```
 
 **核心不变量：云端不知道每台机器人长什么样。** 云端只表达"我想要什么"（情感意图 +
@@ -55,6 +55,7 @@
 | `client-py/` | Reachy 端侧全栈（音频/UI/动作 MCP 工具） | 对话决策 |
 | `daliang/chassis-gateway/` | 底盘协议 ↔ MCP 工具的翻译层 + Mock Server | 语音/屏幕/表情（那是 companion-app 的事） |
 | `daliang/companion-app/` | 大亮表现层（听/说/看/表情），`VendorSdkBridge` 为唯一厂商依赖点 | 底盘运动（经 chassis-gateway） |
+| `pepper/` | Pepper 端侧全栈（NAOqi 音频/UI/动作/导航 MCP 工具） | 对话决策 |
 
 ## 4. 大亮的特殊架构（双网关拆分）
 
@@ -83,3 +84,5 @@
 - 机器人必须在**无摄像头**模式下跑通完整陪伴链路（视觉是可选增强）；
 - 大亮 geofence：`region` 虚拟墙做卧室/卫生间禁入；
 - 底盘软急停 `softScram` 挂到云端 `stop_all` 工具，任何 Agent 可调用。
+- Pepper（NAOqi 三轮人形）：自带防跌倒（机身倾斜即切断电机），但失联看门狗仍须停运动（`self.pepper.stop_all`）；NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似 geofence；**禁用 Pepper 内置云端 ASR/TTS/Dialogue**，改云端 xiaozhi + GPT-SoVITS（见 ADR-011 §决策 4.8）。
+- Pepper（NAOqi 三轮人形）：自带防跌倒（机身倾斜即切断电机），但失联看门狗仍须停运动（`self.pepper.stop_all`）；NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似 geofence；**禁用 Pepper 内置云端 ASR/TTS/Dialogue**，改云端 xiaozhi + GPT-SoVITS（见 ADR-011 §决策 4.8）。

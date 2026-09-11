@@ -1,8 +1,8 @@
 # 岁悦大脑 · MCP Server
 
-把云端统一意图分发中枢 `SuiyueBrain` 暴露成一个**标准 MCP server**，让 `xiaozhi-esp32-server`（小智云端）以标准工具调用驱动"一个大脑三个身体"。
+把云端统一意图分发中枢 `SuiyueBrain` 暴露成一个**标准 MCP server**，让 `xiaozhi-esp32-server`（小智云端）以标准工具调用驱动"一个大脑四个身体"。
 
-> 这是 ADR-002「三本体一脑」+ MCP-CONTRACT 的云端收敛点：云端只下发 `self.suiyue.emote`，端侧按各自能力注册表决定具体动作；大亮底盘的 `self.daliang.*` 工具也一并暴露给 Agent 做看护编排。
+> 这是 ADR-002「四本体一脑」+ MCP-CONTRACT 的云端收敛点：云端只下发 `self.suiyue.emote`，端侧按各自能力注册表决定具体动作；大亮底盘的 `self.daliang.*` 工具、Pepper 的 `self.pepper.*` 工具也一并暴露给 Agent 做看护编排。
 
 ## 1. 暴露的工具
 
