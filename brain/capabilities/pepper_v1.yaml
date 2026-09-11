@@ -26,18 +26,25 @@ channels: [audio_in, audio_out, action, screen, mobility]
 
 naoqi:
   broker_url: tcp://192.168.31.<pepper_ip>:9559
-  sdk: qi (Python 2.7 only) / naoqi Python SDK   # 2.9 官方 qi 仅支持 Py2.7；末端起 Py2.7 桥
-  proxies_used:                  # 仅列本系统用到的，其余 NAOqi 服务不动
-    - ALMotion                    # 关节/轮子运动、killAllTasks 急停
+  sdk: qi (Python 2.7 only) / naoqi Python SDK   # 2.9 官方 qi 仅支持 Py2.7；NAOqi 2.5 培训文档实证同代 Py2.7；末端起 Py2.7 桥
+  proxies_used:                  # 仅列本系统用到的；命名以 NAOqi 2.5 大学培训文档实证为准
+    - ALMemory                    # 集中"内存"：传感器/事件/信号枢纽（订阅 HeadTouched 等）→ 最优先接
+    - ALMotion                    # 关节/轮子运动、killAllTasks 急停、moveTo 基础移动
     - ALRobotPosture              # Stand/Sit/Crouch 等预定义姿态
     - ALAnimationPlayer           # 播放预制动画（挥手/拥抱等）
-    - ALBasicAwareness            # 注视/在场（替代视觉在场门控，可选）
-    - ALNavigation                # 拓扑地图导航（建图需人工）
+    - ALBasicAwareness            # 注视/在场（可选）
+    - ALAudioRecorder             # 麦克风录音→WAV 经局域网到本地 PC（音频上云入口，见 2-3 节）
+    - ALSoundLocalization         # 声源定位（可选，辅助面向说话人）
+    - ALFaceDetection             # 人脸检测/识别（在场感知）
+    - ALPeoplePerception          # 人体感知（计数/距离）
+    - ALTracker                   # 跟踪人体（可选）
     - ALTabletService             # 平板渲染 companion Web UI
+    - ALNavigation                # 拓扑地图导航【可选·降级】：培训文档导航章走 ROS(naoqi_driver)，纯 qi 路径未实证；先用 ALMotion.moveTo + 基础避障
   disabled_cloud_services:        # 离线必须关，见 ADR-011 §决策 4.8
-    - ALSpeechRecognition         # 改走云端 xiaozhi FunASR
-    - ALTextToSpeech              # 改走云端 GPT-SoVITS 流式
-    - ALDialogue                  # 改走云端 Intent Router
+    - ALSpeechRecognition         # 禁用内置 ASR；改走云端 xiaozhi FunASR（培训文档语音章未用内置识别，印证）
+    - ALTextToSpeech              # 禁用内置 TTS；改走云端 GPT-SoVITS 流式（老年女声克隆）
+    - ALDialog                    # 禁用 ALDialog(.top 规则引擎)；对话/意图改走云端 Intent Router
+    - ALAutonomousLife            # 关键：禁用自主生命（置 disabled/nonAutonomous），否则 NAOqi 自作主张移动/交互，与云端显式控制冲突
     - 系统遥测 / 自动更新检查       # 关机箱外连 SoftBank，air-gapped 必断
 
 action_space:

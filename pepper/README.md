@@ -94,3 +94,16 @@ suiyue/pepper/
 - [ ] 演示：老人说"岁悦过来坐坐" → Pepper `self.pepper.approach` + 挥手 + 平板问候语；与 Otto/Reachy/大亮同台。
 
 > Pepper 接入验证「端侧 OS 透明」原则（D2）再次成立：云端只认 xiaozhi 协议 + MCP，不知背后是 RTOS / Linux / Android / NAOqi。
+
+## 7. 官方 SDK 培训文档核对（NAOqi 2.5 大学培训文档）
+
+已对照《NAOqi Python SDK 大学培训文档》（148 页，基于 NAOqi **2.5**）逐章核对，对 §2 架构与能力注册表的支撑/修正如下：
+
+- **代际一致**：文档基于 NAOqi 2.5（链接 `pepper-naoqi-25`），与本方案锁定的 **2.9 同属 legacy NAOqi 代**，API 命名与连接方式一致 → 2.9 不升级到 3 的决策稳。
+- **Python 2.7 铁证**：文档示例脚本首行 `#!/usr/bin/env python2.7`（ROS 章节 rospy 节点）→ 官方 `qi` SDK 确为 **Py2.7 only**，末端 Py2.7 qi-bridge 路线正确。
+- **连接方式 = `--qi-url` 直连**：所有示例 `python xxx.py --qi-url pepper.local（或 Pepper IP）` 经**局域网直连**，文档**无"开发者模式 / IP 白名单 / 防火墙"**要求 → 收敛尽调清单 P4（远程连接硬阻塞）为"真机 2.9 验证即可"。
+- **音频链路印证**：`audio_record.py` 经局域网把 Pepper 麦克风录成 **WAV** 传到本地 PC（2-3 节）→ 正是 `naoqi_bridge/audio.py` 要做的事（Pepper 麦克风 → 本地 → 云 FunASR）。
+- **核心 proxy 实证命名**（已校准 `pepper_v1.yaml`）：ALMemory / ALMotion / ALRobotPosture / ALAnimationPlayer / ALBasicAwareness / ALAudioRecorder / ALSoundLocalization / ALFaceDetection / ALPeoplePerception / ALTracker / ALTabletService / ALDialog / ALTextToSpeech / ALAnimatedSpeech / ALAutonomousLife。
+- **禁用 ALAutonomousLife（新增）**：云端显式控制架构下必须置 `disabled/nonAutonomous`，否则 NAOqi 自主行为会与动作指令冲突。
+- **导航走 ROS**：文档第 5 章"导航"实际是 **ROS 路线**（`naoqi_driver` + ROS Kinetic + Gmapping/AMCL/move_base），非纯 `qi` 的 ALNavigation。本方案不引入 ROS，纯 qi 路径用 `ALMotion.moveTo` + 基础避障；ALNavigation 拓扑导航列为**可选降级**，待真机 2.9 验证。
+- **视觉/人脸**：ALFaceDetection + ALPeoplePerception 经局域网传画面到本地 PC（3 章）→ 与"视觉上云/本地处理"一致。
