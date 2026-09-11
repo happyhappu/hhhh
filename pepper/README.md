@@ -14,7 +14,7 @@
 | 扬声器 | 2 个 |
 | 摄像头 | 2 RGB + **3D 深度（额头红外）**，可用作在场/人脸/深度 |
 | 主板 | x86 嵌入式级（Intel Atom 类），**算力弱** |
-| 操作系统 | **NAOqi**（Linux 中间件，Python SDK `qi`） |
+| 操作系统 | **NAOqi 2.9**（Linux 中间件；官方 `qi` Python SDK **仅 Python 2.7**） |
 | 通讯 | Wi-Fi 2.4G/5G；局域网 `tcp://<ip>:9559` 的 NAOqi broker |
 | 导航 | **ALNavigation**（拓扑地图，需人工建图；非 SLAM 精度） |
 | 制造商 | SoftBank Robotics（Aldebaran） |
@@ -31,11 +31,14 @@
    ├─ ALNavigation                                ← self.pepper.navigate/approach/patrol
    └─ ALTabletService                             ← self.pepper.tablet_render（companion Web UI）
         │
-        └─ suiyue-pepper 网关（Python，跑在实验室服务器或同网 SBC，不必在 Pepper 上）
-              └─ WS 连云端大脑（与 otto/reachy 同协议）+ NAOqi broker 连 Pepper
+        └─ suiyue-pepper 网关（Python 3 主进程，跑在实验室服务器/同网 SBC）
+              ├─ WS 连云端大脑（与 otto/reachy 同协议）
+              └─ 本地 IPC → qi-bridge（Python 2.7 子进程，连 Pepper NAOqi broker :9559）
 ```
 
 > 网关**不必跑在 Pepper 上**（Pepper 机载弱）：跑在实验室服务器或常开树莓派均可，只要求与 Pepper 同局域网。这与 chassis-gateway「外移到常开设备」的思路一致（ADR-011 §决策 3）。
+>
+> **NAOqi 版本决策（2026-09-11）**：当前为 **NAOqi 2.9**，可升级到 NAOqi 3（Android 基座 + QiSDK，Java），但**不升级**——升级路线需安卓/Java 开发，而我方技术栈为 Python、暂无安卓开发经验。故保持 2.9：用官方 `qi` Python SDK（**仅 Python 2.7**）在实验室服务器上起一个轻量 **`qi`-bridge 子进程**连接 Pepper broker，`suiyue-pepper` Python 3 主网关经本地 IPC（WebSocket / Unix socket）与桥通信。整个大脑逻辑仍是 Python 3，2.7 仅作末端协议桥。
 
 ## 3. 与现有三本体的差异点
 
@@ -70,7 +73,7 @@ Pepper 介于 Reachy（桌面）与大亮（全功能移动服务）之间：**�
 ```
 suiyue/pepper/
 ├── README.md                 # 本文件
-├── naoqi_bridge/             # ★ 待建：qi SDK 桥（音频/动作/导航/平板）
+├── naoqi_bridge/             # ★ 待建：Python 2.7 qi SDK 桥（音频/动作/导航/平板）
 │   ├── audio.py              # 麦克风采集 → Opus → WS；TTS 流式 → 扬声器
 │   ├── motion.py             # ALMotion/ALRobotPosture/ALAnimationPlayer → self.pepper.emote
 │   ├── navigation.py         # ALNavigation → self.pepper.navigate/approach/patrol
@@ -79,10 +82,11 @@ suiyue/pepper/
 ```
 
 ### P0 · 阻塞启动（类比大亮 D6）
-- [ ] 确认 Pepper 固件版本与 **NAOqi Python SDK 可用性**（qi SDK 是否随镜像开放 / 需单独授权）；
+- [x] Pepper 固件 **NAOqi 2.9** 已确认，保持不升级（升级 NAOqi 3 = Android/QiSDK/Java，缺安卓开发能力）；
+- [ ] 获取 **Python 2.7 版 `qi` SDK 包**（SoftBank 官方 naoqi Python SDK，随镜像或单独授权）——P0 唯一剩余阻塞；
 - [ ] 确认本地**中文语音包 / 中文字体**是否已预装（离线兜底用）；
-- [ ] 确认 `tcp://<ip>:9559` 在实验室局域网可达、防火墙放行；
-- [ ] 评估 Pepper 是否仍需 SoftBank 账号激活（部分批次开机需联网激活，air-gapped 前置条件）。
+- [ ] 确认 `tcp://<ip>:9559` 在实验室局域网可达、防火墙放行；并确认 NAOqi 2.9 远程连接无需额外 IP 白名单/开发者模式（否则需在 Pepper 侧开启）；
+- [ ] 评估 Pepper 是否仍需 SoftBank 账号激活（部分批次开机需联网激活，air-gapped 前置条件）——见尽调清单 Q 节。
 
 ### P1 · 阶段 A 工程准备
 - [ ] fork/建 `suiyue-pepper`，实现 `naoqi_bridge/audio.py`（先跑通音频链路）；
