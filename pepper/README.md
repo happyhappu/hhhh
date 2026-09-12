@@ -73,23 +73,33 @@ Pepper 介于 Reachy（桌面）与大亮（全功能移动服务）之间：**�
 ```
 suiyue/pepper/
 ├── README.md                 # 本文件
-├── naoqi_bridge/             # ★ 待建：Python 2.7 qi SDK 桥（音频/动作/导航/平板）
-│   ├── audio.py              # 麦克风采集 → Opus → WS；TTS 流式 → 扬声器
-│   ├── motion.py             # ALMotion/ALRobotPosture/ALAnimationPlayer → self.pepper.emote
-│   ├── navigation.py         # ALNavigation → self.pepper.navigate/approach/patrol
-│   └── tablet.py             # ALTabletService → self.pepper.tablet_render
+├── naoqi_bridge/             # Python 2.7 qi SDK 桥（音频/动作/导航/平板）
+│   ├── bridge.py             # 主入口：连 broker(:9559) + 本地 TCP IPC 派发 + 急停
+│   ├── audio.py              # 麦克风采集（ALAudioDevice/ALMemory 事件，培训文档 2-3 节）
+│   └── README.md             # 运行环境 / IPC 协议 / 动作原语映射
 └── packs/pepper_cn_v1/       # ★ 待建：场景包（镜像 daliang_cn_v1 的可选层）
 ```
 
 ### P0 · 阻塞启动（类比大亮 D6）
 - [x] Pepper 固件 **NAOqi 2.9** 已确认，保持不升级（升级 NAOqi 3 = Android/QiSDK/Java，缺安卓开发能力）；
-- [ ] 获取 **Python 2.7 版 `qi` SDK 包**（SoftBank 官方 naoqi Python SDK，随镜像或单独授权）——P0 唯一剩余阻塞；
+- [x] **Python 2.7 `qi` SDK 包已获取**（本地 `pynaoqi-python2.7-2.5.7.1-win32-vs2013/`，构建版本 **2.5.7.1**，VC120/VS2013 运行时，`bin/` 已含 msvcr120.dll 可干净加载）；SDK 同时暴露 `import qi`（lib/qi 包）与 `import naoqi`（lib/naoqi.py · ALProxy）两套 API；
 - [ ] 确认本地**中文语音包 / 中文字体**是否已预装（离线兜底用）；
-- [ ] 确认 `tcp://<ip>:9559` 在实验室局域网可达、防火墙放行；并确认 NAOqi 2.9 远程连接无需额外 IP 白名单/开发者模式（否则需在 Pepper 侧开启）；
-- [ ] 评估 Pepper 是否仍需 SoftBank 账号激活（部分批次开机需联网激活，air-gapped 前置条件）——见尽调清单 Q 节。
+- [x] 确认 `tcp://<ip>:9559` 实验室局域网可达；培训文档实证 `--qi-url` 直连**无需 IP 白名单/开发者模式**（P4 降级为真机验证项）；
+- [x] **Pepper 开机无需联网激活**（用户已确认）→ air-gapped 前置条件满足，无 SoftBank 账号激活依赖；见尽调清单 Q 节已闭环。
+
+### SDK 本地化运行环境（Py2.7 桥）
+- SDK 路径：`../../pynaoqi-python2.7-2.5.7.1-win32-vs2013/`（工作区根，未纳入 git；运行前 `lib`→PYTHONPATH、`bin`+`lib`→PATH）。
+- 启动桥（Windows）：
+  ```bat
+  set PYTHONPATH=<sdk>\lib
+  set PATH=<sdk>\bin;<sdk>\lib;%PATH%
+  python2.7 pepper\naoqi_bridge\bridge.py --qi-url tcp://<pepper-ip>:9559
+  ```
+- 连接用 `qi.Session().connect(...)`（或 `from naoqi import ALProxy`）；`bin/` 内 msvcr120/msvcp120 已随包，干净 Windows 可直接 import，无需另装 VS2013 运行库。
+- ⚠️ 该 SDK 为 **Py2.7 构建**：桥子进程必须用 Python 2.7 解释器运行；主网关仍 Py3.13，二者经本地 WebSocket IPC 通信（见 §2 架构）。
 
 ### P1 · 阶段 A 工程准备
-- [ ] fork/建 `suiyue-pepper`，实现 `naoqi_bridge/audio.py`（先跑通音频链路）；
+- [x] `naoqi_bridge/` 骨架已建（bridge.py + audio.py + README）；下一步**真机联调**跑通音频链路（见 `naoqi_bridge/README.md` TODO）；
 - [ ] 云端加 `pepper_cn_v1` 场景包骨架 + `t_device_registry` 加 `pepper_v1` 条目；
 - [ ] 演示：老人说"岁悦过来坐坐" → Pepper `self.pepper.approach` + 挥手 + 平板问候语；与 Otto/Reachy/大亮同台。
 
@@ -107,3 +117,4 @@ suiyue/pepper/
 - **禁用 ALAutonomousLife（新增）**：云端显式控制架构下必须置 `disabled/nonAutonomous`，否则 NAOqi 自主行为会与动作指令冲突。
 - **导航走 ROS**：文档第 5 章"导航"实际是 **ROS 路线**（`naoqi_driver` + ROS Kinetic + Gmapping/AMCL/move_base），非纯 `qi` 的 ALNavigation。本方案不引入 ROS，纯 qi 路径用 `ALMotion.moveTo` + 基础避障；ALNavigation 拓扑导航列为**可选降级**，待真机 2.9 验证。
 - **视觉/人脸**：ALFaceDetection + ALPeoplePerception 经局域网传画面到本地 PC（3 章）→ 与"视觉上云/本地处理"一致。
+- **SDK 版本对齐（新增）**：已获取官方 `pynaoqi-python2.7-2.5.7.1-win32-vs2013`（**2.5.7.1** 构建，Py2.7，VC120）。版本号 `2.5.7.1` 指 **pynaoqi 构建号**，与机器人固件 **NAOqi 2.9** 跨代兼容；本方案用到的标准模块（ALMotion/ALTextToSpeech/ALDialog/ALAudioRecorder/ALTabletService 等）在 2.5→2.9 间 API 稳定。个别 2.9 新增模块若不在该 SDK 中，真机连接时 `service not found`，列为**真机验证项**而非阻塞。

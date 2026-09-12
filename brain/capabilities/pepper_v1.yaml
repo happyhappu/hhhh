@@ -19,9 +19,13 @@ transport:
 runtime:
   naoqi_version: "2.9"            # 当前固件；不升级到 3（Android/QiSDK/Java，缺安卓开发）
   qi_python: "2.7"                # 官方 qi Python SDK 仅支持 Py2.7
+  sdk_version: "2.5.7.1"          # 已获取 pynaoqi 构建号（2.5.x 系，Py2.7，VC120）；与 2.9 固件跨代兼容
+  sdk_path: pynaoqi-python2.7-2.5.7.1-win32-vs2013/   # 工作区根，未纳入 git；运行前 lib→PYTHONPATH、bin+lib→PATH
+  sdk_api: "qi (lib/qi) 或 naoqi (lib/naoqi.py·ALProxy)"  # 两套 API 同在包内
   gateway_main: python3.13        # suiyue-pepper 主网关（MCP 侧）
   qi_bridge: python2.7           # 末端 qi-bridge 子进程，连 Pepper broker :9559
   ipc: local_websocket           # 主网关 ↔ qi-bridge 本地 IPC
+  boot_activation_required: false # 用户已确认：Pepper 开机无需联网激活 → air-gapped 成立
 channels: [audio_in, audio_out, action, screen, mobility]
 
 naoqi:

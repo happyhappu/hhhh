@@ -107,7 +107,7 @@ LLM:
   - [ ] 关闭 NAOqi 自动更新检查与遥测（机箱外连 SoftBank，断网会反复重试超时）
   - [ ] 确认本地中文语音包 / 中文字体已预装（离线兜底）
   - [ ] ALNavigation 拓扑地图已本地建好（离线不依赖云端地图）
-  - [ ] 若 Pepper 开机需联网激活账号 → 先在有网时激活再断网（air-gapped 前置条件）
+  - [x] **Pepper 开机无需联网激活**（用户已确认）→ air-gapped 前置条件满足，无 SoftBank 账号激活依赖；SDK 已本地化（pynaoqi 2.5.7.1，Py2.7）
   - [ ] 失联看门狗：网关 ↔ 云端断连 > N 秒 → `self.pepper.stop_all`
 
 ---
