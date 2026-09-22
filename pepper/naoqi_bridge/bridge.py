@@ -61,6 +61,7 @@ class Pepper(object):
     def __init__(self, session, qi_url):
         self.session = session
         self.qi_url = qi_url
+        self.pepper_ip = _parse_pepper_ip(qi_url)
         self.proxies = PepperProxies(session)
         self.motion = MotionController(self.proxies)
         self.navigation = NavigationController(self.proxies)
@@ -132,6 +133,16 @@ class Pepper(object):
         self._audio_running = False
         return {"audio": "stopped"}
 
+    def audio_play(self, params):
+        # 云端 GPT-SoVITS TTS 音频（PCM）经 Pepper 扬声器放出
+        data_b64 = params.get("data_b64")
+        if not data_b64:
+            return {"error": "no data_b64"}
+        pcm = base64.b64decode(data_b64)
+        rate = params.get("rate", 16000)
+        channels = params.get("channels", 1)
+        return audio_mod.play_audio(pcm, rate, channels, self.session)
+
     def vision_start(self, on_event, params):
         res = self.vision.start(on_event, params)
         self._vision_running = True
@@ -141,6 +152,17 @@ class Pepper(object):
         res = self.vision.stop(params)
         self._vision_running = False
         return res
+
+
+# --------------------------------------------------------------------------
+# 工具：从 qi_url 解析 Pepper IP（audio_play 用 ALProxy 连接）
+# --------------------------------------------------------------------------
+def _parse_pepper_ip(qi_url):
+    """tcp://192.168.31.x:9559 -> 192.168.31.x"""
+    try:
+        return qi_url.split("://", 1)[1].split(":")[0]
+    except Exception:
+        return "127.0.0.1"
 
 
 # --------------------------------------------------------------------------
@@ -231,6 +253,9 @@ class _Handler(socketserver.StreamRequestHandler):
             elif action == "audio_stop":
                 result = pepper.audio_stop(params)
                 self.audio_queue.put(None)   # 通知 sender 线程退出
+                self._send({"id": mid, "ok": True, "result": result})
+            elif action == "audio_play":
+                result = pepper.audio_play(params)
                 self._send({"id": mid, "ok": True, "result": result})
             elif action == "vision_start":
                 result = pepper.vision_start(self._make_event_cb(), params)

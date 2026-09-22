@@ -93,11 +93,16 @@ Pepper 介于 Reachy（桌面）与大亮（全功能移动服务）之间：**�
 ```
 suiyue/pepper/
 ├── README.md                 # 本文件
+├── gateway.py                # ★ 主网关（Python 3.13）：扮演 xiaozhi client 连云端 WS + 本地 TCP 连 naoqi_bridge
+├── gateway_config.py         # 主网关配置常量（云端 WS / 音频 / VAD / emotion 映射）
+├── requirements.txt          # 主网关依赖（websocket-client；opuslib 可选）
 ├── naoqi_bridge/             # Python 2.7 qi SDK 桥（音频/动作/导航/平板）
-│   ├── bridge.py             # 主入口：连 broker(:9559) + 本地 TCP IPC 派发 + 急停
-│   ├── audio.py              # 麦克风采集（ALAudioDevice/ALMemory 事件，培训文档 2-3 节）
+│   ├── bridge.py             # 主入口：连 broker(:9559) + 本地 TCP IPC 派发 + 急停 + 看门狗
+│   ├── audio.py              # 麦克风采集（上行）+ TTS 播放 audio_play（下行）
+│   ├── config.py / proxies.py / motion.py / navigation.py / tablet.py / vision.py
 │   └── README.md             # 运行环境 / IPC 协议 / 动作原语映射
-└── packs/pepper_cn_v1/       # ★ 待建：场景包（镜像 daliang_cn_v1 的可选层）
+├── test_bridge_client.py     # Py3 联调客户端（验证 IPC 协议与音频帧，无需 Pepper）
+ing│── packs/pepper_cn_v1/       # ★ 待建：场景包（镜像 daliang_cn_v1 的可选层）
 ```
 
 ### P0 · 阻塞启动（类比大亮 D6）
@@ -119,9 +124,11 @@ suiyue/pepper/
 - ⚠️ 该 SDK 为 **Py2.7 构建**：桥子进程必须用 Python 2.7 解释器运行；主网关仍 Py3.13，二者经本地 TCP（127.0.0.1:9560）JSON 行 IPC 通信（见 §2 架构）。
 
 ### P1 · 阶段 A 工程准备
-- [x] `naoqi_bridge/` 骨架已建（bridge.py + audio.py + README）；下一步**真机联调**跑通音频链路（见 `naoqi_bridge/README.md` TODO）；
+- [x] `naoqi_bridge/` 完整实现（bridge.py + audio.py + 各控制器 + 失联看门狗）；
+- [x] `suiyue-pepper` 主网关已落地（`gateway.py`：扮演 xiaozhi client 连云端 WS + 本地 TCP 连桥，桥接音频/TTS/emotion/动作原语）；
+- [ ] **真机联调**：先跑 `python2.7 naoqi_bridge/bridge.py` 连 Pepper broker，再起 `python3 gateway.py` 打通端到端音频对话（见 `naoqi_bridge/README.md` TODO 与 `真机联调checklist.md`）；
 - [ ] 云端加 `pepper_cn_v1` 场景包骨架 + `t_device_registry` 加 `pepper_v1` 条目；
-- [ ] 演示：老人说"岁悦过来坐坐" → Pepper `self.pepper.approach` + 挥手 + 平板问候语；与 Otto/Reachy/大亮同台。
+- [ ] 演示：老人说"岁悦过来坐坐" → Pepper approach + 挥手 + 平板问候语；与 Otto/Reachy/大亮同台。
 
 > Pepper 接入验证「端侧 OS 透明」原则（D2）再次成立：云端只认 xiaozhi 协议 + MCP，不知背后是 RTOS / Linux / Android / NAOqi。
 

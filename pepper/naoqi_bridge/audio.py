@@ -125,3 +125,55 @@ def stop_audio_stream():
     _AUDIO_STATE["running"] = False
     _AUDIO_STATE["callback"] = None
     print("[audio] 麦克风订阅已停止")
+
+
+# ---- TTS 播放（云端 GPT-SoVITS 音频经 Pepper 扬声器放出）----
+import os as _os
+import tempfile as _tempfile
+import wave as _wave
+import io as _io
+
+
+def pcm_to_wav_bytes(pcm, rate, channels, sample_width=2):
+    """把 16bit LE PCM 字节封装成 WAV 文件字节（Pepper ALAudioPlayer 需文件输入）。"""
+    if not pcm:
+        return b""
+    f = _io.BytesIO()
+    w = _wave.open(f, "wb")
+    try:
+        w.setnchannels(channels)
+        w.setsampwidth(sample_width)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    finally:
+        w.close()
+    return f.getvalue()
+
+
+def play_audio(pcm, rate, channels, session, sample_width=2):
+    """把 PCM 经 ALAudioPlayer.playToSpeaker 从 Pepper 扬声器放出。
+
+    Pepper 无裸 PCM 播放 proxy；封装 WAV 临时文件 -> ALAudioPlayer.playToSpeaker。
+    返回 {played:True} 或 {played:False, reason/error}。
+    """
+    if not pcm:
+        return {"played": False, "reason": "empty"}
+    wav = pcm_to_wav_bytes(pcm, rate, channels, sample_width)
+    try:
+        ap = session.service("ALAudioPlayer")
+    except Exception as exc:
+        return {"played": False, "reason": "ALAudioPlayer 不可用: %s" % exc}
+    if ap is None:
+        return {"played": False, "reason": "ALAudioPlayer unavailable"}
+    fd, path = _tempfile.mkstemp(suffix=".wav", prefix="pepper_tts_")
+    try:
+        with _os.fdopen(fd, "wb") as fh:
+            fh.write(wav)
+        # ⚠️ 真机验证方法名：playToSpeaker / playFile / playToFrontLeft
+        ap.playToSpeaker(path)   # 从左前+右前扬声器外放
+    except Exception as exc:
+        return {"played": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+    finally:
+        # 播放异步进行，文件暂留（避免播放中被删导致无声）；下次调用前清理旧文件
+        pass  # TODO: 用计时器/上次句柄延迟清理临时 wav
+    return {"played": True, "path": path}

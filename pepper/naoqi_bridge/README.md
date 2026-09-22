@@ -83,6 +83,7 @@ python2.7 bridge.py --qi-url tcp://192.168.31.<pepper-ip>:9559
 | `stop_all` | ALMotion.killAllTasks + rest | 急停 + 去刚度；同步退订音频/视觉 |
 | `get_status` | ALRobotPosture/ALMemory | 姿态/电量/连接 |
 | `audio_start/stop` | `audio.py` / ALAudioDevice | 麦克风订阅（前麦 16k 单声道） |
+| `audio_play` | `audio.py` / ALAudioPlayer | 云端 TTS PCM → 封装 WAV → 扬声器外放（禁用内置 TTS，改 GPT-SoVITS） |
 | `vision_start/stop` | `vision.py` / ALMemory 事件 | 人脸/人体感知上抛 |
 
 ## 安全与降级
