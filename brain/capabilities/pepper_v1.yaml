@@ -17,9 +17,9 @@ transport:
   dialogue: xiaozhi_websocket      # 音频/意图走小智协议（与 otto/reachy 同）
   motion: naoqi_broker             # 动作/导航/平板走 tcp://<pepper-ip>:9559 的 NAOqi broker
 runtime:
-  naoqi_version: "2.9"            # 当前固件；不升级到 3（Android/QiSDK/Java，缺安卓开发）
+  naoqi_version: "2.5.10.7"        # 当前固件；不升级到 3（Android/QiSDK/Java，缺安卓开发）
   qi_python: "2.7"                # 官方 qi Python SDK 仅支持 Py2.7
-  sdk_version: "2.5.7.1"          # 已获取 pynaoqi 构建号（2.5.x 系，Py2.7，VC120）；与 2.9 固件跨代兼容
+  sdk_version: "2.5.7.1"          # 已获取 pynaoqi 构建号（2.5.x 系，Py2.7，VC120）；与 2.5.10.7 固件同属 2.5 系列、代际吻合
   sdk_path: pynaoqi-python2.7-2.5.7.1-win32-vs2013/   # 工作区根，未纳入 git；运行前 lib→PYTHONPATH、bin+lib→PATH
   sdk_api: "qi (lib/qi) 或 naoqi (lib/naoqi.py·ALProxy)"  # 两套 API 同在包内
   gateway_main: python3.13        # suiyue-pepper 主网关（MCP 侧）
@@ -30,7 +30,7 @@ channels: [audio_in, audio_out, action, screen, mobility]
 
 naoqi:
   broker_url: tcp://192.168.31.<pepper_ip>:9559
-  sdk: qi (Python 2.7 only) / naoqi Python SDK   # 2.9 官方 qi 仅支持 Py2.7；NAOqi 2.5 培训文档实证同代 Py2.7；末端起 Py2.7 桥
+  sdk: qi (Python 2.7 only) / naoqi Python SDK   # NAOqi 官方 qi 仅支持 Py2.7；NAOqi 2.5 培训文档实证同代 Py2.7；末端起 Py2.7 桥
   proxies_used:                  # 仅列本系统用到的；命名以 NAOqi 2.5 大学培训文档实证为准
     - ALMemory                    # 集中"内存"：传感器/事件/信号枢纽（订阅 HeadTouched 等）→ 最优先接
     - ALMotion                    # 关节/轮子运动、killAllTasks 急停、moveTo 基础移动

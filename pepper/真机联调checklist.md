@@ -1,6 +1,6 @@
-# Pepper 真机联调 Checklist（NAOqi 2.9 + pynaoqi 2.5.7.1 桥）
+# Pepper 真机联调 Checklist（NAOqi 2.5.10.7 + pynaoqi 2.5.7.1 桥）
 
-> **背景**：Pepper 固件 NAOqi 2.9，端侧用 `pynaoqi-python2.7-2.5.7.1-win32-vs2013`（Py2.7-only）起 `qi-bridge` 子进程连 broker，Py3 主网关经本地 TCP:9560 IPC 派发动作原语、回收麦克风音频。已确认 **Pepper 开机免联网激活**，故 100% 内网可长期运行。
+> **背景**：Pepper 固件 NAOqi 2.5.10.7，端侧用 `pynaoqi-python2.7-2.5.7.1-win32-vs2013`（Py2.7-only）起 `qi-bridge` 子进程连 broker，Py3 主网关经本地 TCP:9560 IPC 派发动作原语、回收麦克风音频。已确认 **Pepper 开机免联网激活**，故 100% 内网可长期运行。
 >
 > **本文档用途**：在「一台装 Py2.7 的联调机 + 通电同网的 Pepper」就位后，照此逐项验证 `naoqi_bridge/` 的可运行性。所有带 ⚠️ 的项为代码按 NAOqi 2.5 文档形状编写、**未经真机验证**，需真机实测确认，是本次联调的核心目标。
 >
@@ -12,7 +12,7 @@
 
 - [ ] Pepper 上电、立于平整无障碍区，物理急停按钮（后颈/底座）在伸手可及范围
 - [ ] 联调 PC 与 Pepper **同一局域网**（建议直连或同 VLAN，避免跨网段 NAT/隔离）；记录 Pepper IP（机器人设置→网络，或路由器 DHCP 列表）
-- [ ] 确认 Pepper 固件为 **NAOqi 2.9**（设置→关于本机）
+- [ ] 确认 Pepper 固件为 **NAOqi 2.5.10.7**（设置→关于本机）
 - [ ] 已知 **开机免联网激活**（已确认），无需 SoftBank 账号，纯内网可长期运行
 
 ---
@@ -71,7 +71,7 @@
 | `ALMemory` | ✅ 可用 | — |
 | `ALAudioDevice` | ✅ 可用 | — |
 | `ALDialog` / `ALTextToSpeech` | 存在但**禁用** | 不实例化，仅确认存在（改云端） |
-| `ALNavigation` | ⚠️ 2.9 可能无纯 qi 的 ALNavigation | **降级项**，纯 qi 走 `ALMotion.moveTo`，不依赖 |
+| `ALNavigation` | ⚠️ 本方案不依赖 ALNavigation（纯 qi 用 `ALMotion.moveTo`） | **降级项**，纯 qi 走 `ALMotion.moveTo`，不依赖 |
 | `ALAutonomousLife` | ✅ 可用 | 联调期设为 `disabled`（见 §7） |
 
 - **PASS 判据**：上列「✅ 可用」项全部 `service()` 成功；`ALNavigation` `service not found` 属预期（降级项，不影响）
@@ -100,7 +100,7 @@
 - ⚠️ **真机实测确认项**（只改 `audio.py`，不影响 `bridge.py` 其余逻辑）：
   1. `setClientPreferences(name, rate, channels, deinterleave)` 中 `channels=1` 是否真为单声道混合（还是返回 4 通道）
   2. 回调 `value` 的实际类型（`str` / `buffer`）与每帧样本数
-  3. 事件名 `ALAudioDevice/<name>` 在 2.9 是否与文档一致
+  3. 事件名 `ALAudioDevice/<name>` 在 2.5.x 是否与文档一致
 - **PASS 判据**：朝麦克风发声后能稳定收到连续 `audio` 帧；`base64` 解码后字节数 ≈ `2 × 样本数 × 通道`
 - 失败排查：
   - `audio_start` 报错 `service not found: ALAudioDevice` → 先回 §3 确认
@@ -114,7 +114,7 @@
 
 | action | 下发 | 预期 result | 注意 |
 |---|---|---|---|
-| `emote` | `{"action":"emote","params":{"animation":"Wave"}}` | `{"played":"Wave"}`，Pepper 挥手 | ⚠️ 动画标签在 2.9 路径可能不同，先试 `Wave` |
+| `emote` | `{"action":"emote","params":{"animation":"Wave"}}` | `{"played":"Wave"}`，Pepper 挥手 | ⚠️ 动画标签在 2.5.x 路径可能不同，先试 `Wave` |
 | `approach` | `{"action":"approach"}` | `{"approached":"user"}`，前移 0.3m | 先确认周围安全，距离可调 |
 | `navigate` | `{"action":"navigate","params":{"goal":[0,0,0]}}` | 原地（x,y=0 不动） | 广场测试再给非零航点 |
 | `tablet_render` | `{"action":"tablet_render","params":{"html":"<h1>你好</h1>"}}` | `{"tablet":"rendered"}`，平板显示文字 | 需 `ALTabletService` |
@@ -190,7 +190,7 @@ s.close()
 
 - **已清零**：Py2.7 `naoqi` SDK 获取（2.5.7.1）、开机免联网激活、远程连接 IP 白名单（文档实证 `--qi-url` 直连无需）
 - **本次联调目标**：
-  1. 验证 `qi.Session().connect` 在 NAOqi 2.9 实际连通
+  1. 验证 `qi.Session().connect` 在 NAOqi 2.5.10.7 实际连通
   2. 实测 `audio.py` 回调签名/事件名/每帧样本数（⚠️ 项）
   3. 确认动作 proxy 命名（`emote` 动画标签、`approach` 距离等）
 - **唯一剩余前提**：一台装 **Python 2.7** 的联调机 + 通电同网的 Pepper

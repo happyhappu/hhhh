@@ -1,0 +1,15 @@
+# naoqi_bridge 依赖说明（本目录为 Python 2.7 运行，无 PyPI pip 依赖）
+#
+# 运行时：Python 2.7.x（必须 32 位 x86 解释器）
+#   -> pynaoqi 为 win32-vs2013 构建，_qi.pyd 仅 32 位可加载；64 位 Python 会
+#     报 "DLL load failed" / "invalid win32 application"。
+#
+# SDK：pynaoqi-python2.7-2.5.7.1-win32-vs2013/（工作区根，未纳入 git）
+#   运行前必须设置环境变量：
+#     set PYTHONPATH=<sdk>\lib
+#     set PATH=<sdk>\bin;<sdk>\lib;%PATH%
+#   SDK 的 bin/ 已自带 msvcr120.dll / msvcp120.dll + boost vc120 DLL，
+#   干净 Windows 即可 import，无需另装 Visual C++ 2013 可再发行包。
+#
+# 本桥为纯标准库实现（array / base64 / json / socket / threading / signal /
+# argparse），不依赖任何第三方 pip 包。
