@@ -92,6 +92,30 @@ _POLL_EVENTS_TOOL = {
     },
 }
 
+_GET_SCENE_TOOL = {
+    "name": "self.suiyue.get_scene",
+    "description": (
+        "拉取某本体的已选场景包（persona / safety / agents / emotion_calibration），用于组装 LLM "
+        "system prompt。xiaozhi-esp32-server 应在会话开始调用本工具，用返回内容装配 prompt 与可用 "
+        "tools（场景内容只存 brain/packs，server 不硬编码任何 persona/safety 文案）。"
+        "未传 scene 时按 device_model 自动选包，未匹配则回退 default_scene（MCP-CONTRACT §8）。"
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "device_id": {
+                "type": "string",
+                "description": "目标本体 id（须已注册到大脑）",
+            },
+            "scene": {
+                "type": "string",
+                "description": "可选：显式指定场景包 id（覆盖按 device_model 自动选择）",
+            },
+        },
+        "required": ["device_id"],
+    },
+}
+
 
 def _text(payload: Any) -> dict:
     """构造 MCP tools/call 的成功 result（text content）。"""
@@ -157,7 +181,7 @@ class SuiyueMCPServer:
 
     # ---------------- MCP 工具清单 ----------------
     async def list_tools(self) -> list[dict]:
-        tools = [_EMOTE_TOOL, _LIST_DEVICES_TOOL, _POLL_EVENTS_TOOL]
+        tools = [_EMOTE_TOOL, _LIST_DEVICES_TOOL, _POLL_EVENTS_TOOL, _GET_SCENE_TOOL]
         for t in DALIANG_TOOLS:
             tools.append(
                 {
@@ -180,6 +204,8 @@ class SuiyueMCPServer:
             if name == "self.suiyue.poll_events":
                 limit = int(args.get("limit", 10))
                 return _text(self._event_log[-limit:])
+            if name == "self.suiyue.get_scene":
+                return await self._get_scene(args)
             if name.startswith("self.daliang."):
                 return await self._daliang_tool(name, args)
             return _error(f"未知工具: {name}")
@@ -200,6 +226,21 @@ class SuiyueMCPServer:
         else:
             results = {target: await self.brain.dispatch_emote(target, intent)}
         return _text({k: v.to_dict() for k, v in results.items()})
+
+    async def _get_scene(self, args: dict) -> dict:
+        did = (args.get("device_id") or "").strip()
+        if not did:
+            return _error("缺少 device_id")
+        # 把本进程实际注册的工具表传给 brain做过滤：场景包里未注册的工具
+        # （self.pepper.* / profile.* / knowledge.*，见 N1）落到 tools_pending，
+        # 不会出现在 agents[].tools 里，消费方无需重复实现过滤。
+        registered = {t["name"] for t in await self.list_tools()}
+        payload = self.brain.get_scene(did, args.get("scene"),
+                                       available_tools=registered)
+        if payload is None:
+            return _error(f"未找到设备 {did} 的场景包（已注册: {self.brain.device_ids}）")
+        payload["tool_visibility"]["registered_tools"] = sorted(registered)
+        return _text(payload)
 
     async def _daliang_tool(self, name: str, args: dict) -> dict:
         if self.daliang is None:

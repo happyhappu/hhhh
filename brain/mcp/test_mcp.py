@@ -164,5 +164,65 @@ class TestMCPDaliangLive(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(_payload(res), list)
 
 
+class TestMCPGetSceneToolFilter(unittest.IsolatedAsyncioTestCase):
+    """N1 修复：get_scene 必须在**大脑侧**按注册表过滤工具。
+
+    背景：场景包 companion/health 曾声明 8 个大脑未注册的工具
+    （self.pepper.* / profile.* / knowledge.*）。若原样下发，LLM 会调用
+    不存在的工具而中断对话。修复方式不是删 YAML（那是路线图意图），
+    而是让 get_scene 把它们隔离到 tools_pending。
+    """
+
+    async def asyncSetUp(self):
+        self.s = SuiyueMCPServer()
+        self.s.brain.register("pepper-01", "pepper_v1")
+        self.res = await self.s.call_tool(
+            "self.suiyue.get_scene", {"device_id": "pepper-01"})
+        self.scene = _payload(self.res)
+
+    async def test_get_scene_not_error(self):
+        self.assertIsNone(self.res.get("isError"))
+
+    async def test_tool_visibility_filtered(self):
+        tv = self.scene["tool_visibility"]
+        self.assertTrue(tv["filtered"], "get_scene 未开启工具过滤")
+        self.assertGreater(tv["registered_count"], 0)
+        self.assertIn("self.suiyue.emote", tv["registered_tools"])
+
+    async def test_exposed_tools_are_subset_of_registry(self):
+        """核心不变式：agents[].tools ⊆ 本server 实际注册的工具。"""
+        registered = {t["name"] for t in await self.s.list_tools()}
+        for a in self.scene["agents"]:
+            for t in a["tools"]:
+                self.assertIn(t, registered,
+                              "下发了未注册工具: %s（agent %s）" % (t, a["name"]))
+
+    async def test_the_eight_tools_are_pending_not_exposed(self):
+        """原8 个未注册工具必须全在 tools_pending，一个都不能出现在 tools。"""
+        expect = {
+            "self.pepper.approach", "self.pepper.tablet_render", "self.pepper.stop_all",
+            "profile.get", "profile.confirm", "knowledge.rag_search",
+        }
+        exposed, pending = set(), set()
+        for a in self.scene["agents"]:
+            exposed |= set(a["tools"])
+            pending |= set(a["tools_pending"])
+        self.assertEqual(exposed & expect, set(), "未注册工具泄漏到 tools")
+        # companion + health 合并后应覆盖全部 6 个唯一工具名
+        self.assertTrue(expect.issubset(pending),
+                        "缺漏: %s" % (expect - pending))
+
+    async def test_emote_still_exposed(self):
+        """过滤不能误伤真正可用的工具。"""
+        exposed = {t for a in self.scene["agents"] for t in a["tools"]}
+        self.assertIn("self.suiyue.emote", exposed)
+
+    async def test_unknown_device_still_errors(self):
+        res = await self.s.call_tool("self.suiyue.get_scene", {"device_id": "ghost"})
+        self.assertTrue(res.get("isError"))
+        res = await self.s.call_tool("self.suiyue.get_scene", {})
+        self.assertTrue(res.get("isError"))
+
+
 if __name__ == "__main__":
     unittest.main()

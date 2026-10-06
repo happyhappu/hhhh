@@ -1,4 +1,5 @@
 {
+  "_comment": "本文件把岁悦大脑 MCP server 配成 xiaozhi-esp32-server 的 MCP server（stdio 拉起）。device_id 不在此处配（这是 MCP server 启动参数，非设备身份）；设备身份在 xiaozhi 自身 config.yaml 的 suiyue.device_id 字段（须与大脑 brain/mcp/config.yaml 的 pepper-01 一致）。会话开始 xiaozhi 应主动调 self.suiyue.get_scene(device_id=该值) 组装 system prompt；调用失败回退写死 prompt，不阻塞对话。薄改动细节见 brain/mcp/GET_SCENE_OVERLAY_GUIDE.md。",
   "mcpServers": {
     "SuiyueBrain": {
       "command": "C:/Users/eddie/.workbuddy/binaries/python/envs/default/Scripts/python.exe",

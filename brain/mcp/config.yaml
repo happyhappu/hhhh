@@ -25,3 +25,7 @@ devices:
     provider: daliang
     chassis:
       url: ws://192.168.31.7:6060   # 真机局域网地址；演示可改 ws://127.0.0.1:PORT（连 mock）
+
+  - device_id: pepper-01
+    model: pepper_v1
+    provider: static            # 模拟固件按能力注册表解析；真实动作由端侧 naoqi_bridge 本地 EMOTION_TO_ACTION 执行（云零改）
