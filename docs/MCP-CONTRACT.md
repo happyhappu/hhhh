@@ -71,11 +71,37 @@
 
 **安全约束**：Pepper 自带防跌倒（机身倾斜即切断电机），失联看门狗仍须停运动；**禁用内置云端 ASR/TTS/Dialogue**（改云端 xiaozhi + GPT-SoVITS）；NAOqi 无原生 geofence，用 ALNavigation 禁区 + 限速近似（见 ARCHITECTURE §6 与 `pepper/README.md`）。
 
-## 7. Pepper 端侧（pepper/ 注册）
+## 8. 场景包（G5 / ADR-012）
 
-- `self.pepper.emote`：映射到 20 DOF（ALMotion / ALRobotPosture / ALAnimationPlayer），如 happy → 靠近半步 + 挥手；
-- `self.pepper.navigate` / `self.pepper.approach` / `self.pepper.patrol`：ALNavigation 拓扑导航（精度弱于大亮 SLAM，限速 0.4 m/s）；
-- `self.pepper.tablet_render`：10.1" 平板渲染 companion Web UI（ALTabletService）；
-- `self.pepper.get_status` / `self.pepper.stop_all`：电量/姿态轮询 + 失联急停（ALMotion.killAllTasks + 回 Stand）。
+> 场景包内容（persona / safety / agents / emotion_calibration）只存 `brain/packs/`，大脑按设备选择后通过本工具暴露给 LLM 所在的 xiaozhi server。server **不硬编码任何 persona/safety 文案**，满足"端侧 OS 透明 / 场景热切换"原则。
 
-**安全约束**：Pepper 自带防跌倒（机身倾斜即切断电机），失联看门狗仍须停运动；**禁用内置云端 ASR/TTS/Dialogue**（改云端 xiaozhi + GPT-SoVITS）；NAOqi 无原生 geofence，用 ALNavigation 禁区 + 限速近似（见 ARCHITECTURE §6 与 `pepper/README.md`）。
+### `self.suiyue.get_scene`
+
+```json
+// 云端 → xiaozhi server（会话开始时拉取，用于组装 LLM system prompt）
+{
+  "tool": "self.suiyue.get_scene",
+  "parameters": {
+    "device_id": "pepper-01",        // 必须：已注册到大脑的设备
+    "scene": "pepper_cn_v1"           // 可选：显式指定包 id，覆盖按 device_model 自动选择
+  }
+}
+// 返回：
+{
+  "scene_pack": "pepper_cn_v1",
+  "device_model": "pepper_v1",
+  "persona": { "persona": {...}, "target_user": {...}, "emotion_calibration": {...}, ... },
+  "safety": { "hard_rules": [...], "disclaimer": "...", "emergency": {...} },
+  "agents": [ { "name", "system_prompt", "tools", "trigger_examples" } ],
+  "emotion_calibration": { "happy": {"gain":1.0,"max":0.9,"motion":"approach_and_wave"}, ... }
+}
+```
+
+选择优先级（ADR-012 §4）：显式 `scene` > `device_model` 匹配（同 model 取最高 version）> `default_scene`（elder_cn_v1）。继承（pepper_cn_v1 inherits elder_cn_v1）由大脑侧的 `brain/packs/loader.py` 展开：dict 深合并子胜父、list 子包替换父包、agents 目录并集。
+
+消费约定（fork 纪律，server 侧薄改动）：
+- xiaozhi server 在**会话开始**调用 `get_scene(device_id)`，用返回内容**组装 LLM system prompt**（persona + 各 agent.system_prompt + safety.hard_rules/disclaimer 作护栏）；
+- **只暴露大脑已注册的工具**（当前 `self.suiyue.*` / `self.daliang.*`）；场景包 agent 的工具由**大脑侧按注册表过滤**（`get_scene` 返回的 `agents[].tools` 天然是注册表子集，未注册者落入 `tools_pending`，不下发给 LLM），避免与端侧 `EMOTION_TO_ACTION` 双驱动，见 ADR-012 D-E / `brain/mcp/GET_SCENE_OVERLAY_GUIDE.md` §8；
+- 场景内容只存大脑侧，server 不内联任何文案，支持热切换；
+- 复用现有 MCP 通道，不新增 HTTP 服务；
+- 消费方接线（改 fork 的 3 处）详见 `brain/mcp/GET_SCENE_OVERLAY_GUIDE.md`。

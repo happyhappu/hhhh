@@ -9,6 +9,26 @@
   h1 { font-size:20px; margin:0 0 4px; }
   .sub { color:#475569; font-size:13px; margin:0 0 12px; }
   svg { width:100%; height:auto; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; }
+
+  table { width:100%; border-collapse:collapse; margin:8px 0 4px; background:#fff;
+          border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;
+          font-size:12px; }
+  th { background:#f1f5f9; color:#0f172a; font-weight:600; text-align:left;
+       padding:8px 10px; border-bottom:2px solid #cbd5e1; white-space:nowrap; }
+  td { padding:8px 10px; border-bottom:1px solid #e2e8f0; vertical-align:top;
+       line-height:1.55; }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:nth-child(even) { background:#f8fafc; }
+  code { font-family:Consolas,Monaco,monospace; font-size:11.5px;
+         background:#e2e8f0; padding:1px 5px; border-radius:4px; color:#0f172a; }
+  td code { display:inline-block; margin:1px 0; word-break:break-all; }
+  .muted { color:#64748b; font-size:11px; }
+  .tag { display:inline-block; font-size:10px; font-weight:600; padding:1px 7px;
+         border-radius:999px; color:#fff; margin-top:3px; }
+  .tag-blue   { background:#2563eb; }
+  .tag-cyan   { background:#0891b2; }
+  .tag-purple { background:#7c3aed; }
+  .tag-orange { background:#ea580c; }
 </style>
 </head>
 <body>
@@ -70,23 +90,24 @@
       <text x="150" y="336" fill="#1d4ed8">MCP / 小智 WS</text>
       <text x="356" y="506">WS:6060 / MQTT:1883</text>
     </g>
-    <text x="792" y="402" font-size="10.5" fill="#7c3aed">本地 IPC → Py2.7 bridge → broker :9559</text>
+    <text x="792" y="402" font-size="10.5" fill="#7c3aed">本地 IPC（TCP:9560 JSON 行）→ broker :9559</text>
     <text x="924" y="135" font-size="10.5" fill="#dc2626">出站→黑洞</text>
 
     <!-- ===== 盒子：4090 服务器 ===== -->
-    <rect x="70" y="100" width="380" height="220" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <rect x="70" y="100" width="380" height="234" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
     <text x="82" y="121" fill="#1e3a8a" font-size="14" font-weight="bold">4090 服务器 · 云端大脑</text>
     <text x="82" y="139" fill="#555" font-size="11">192.168.31.10 · 24GB 显存 · 本期单点</text>
     <g font-size="11" fill="#0f172a">
       <text x="82" y="160">xiaozhi-esp32-server (MIT fork) + 岁悦扩展</text>
       <text x="82" y="178">WS 接入 :8000 · OTA :8003</text>
-      <text x="82" y="196">Intent Router · 场景包 elder_cn_v1</text>
-      <text x="82" y="214">LLM 路由 Ollama :11434</text>
-      <text x="98" y="232">· 8B 常驻(~6G) / 14B 按需(~9G)</text>
-      <text x="82" y="250">ASR FunASR · TTS GPT-SoVITS</text>
-      <text x="82" y="268">Emb bge-small(CPU) · 记忆 mem_local</text>
-      <text x="82" y="286">能力注册表 capabilities/（含 pepper_v1）</text>
-      <text x="82" y="304">常驻显存 ≈ 9.5–11GB / 24GB</text>
+      <text x="82" y="196">Intent Router · 场景包按 device_model 选</text>
+      <text x="98" y="212">(elder_cn_v1 / pepper_cn_v1 / kids_v1)</text>
+      <text x="82" y="230">LLM 路由 Ollama :11434</text>
+      <text x="98" y="246">· 8B 常驻(~6G) / 14B 按需(~9G)</text>
+      <text x="82" y="264">ASR FunASR · TTS GPT-SoVITS</text>
+      <text x="82" y="280">Emb bge-small(CPU) · 记忆 mem_local</text>
+      <text x="82" y="296">能力注册表 capabilities/（含 pepper_v1）</text>
+      <text x="82" y="312">常驻显存 ≈ 9.5–11GB / 24GB</text>
     </g>
 
     <!-- 路由器/NTP/UPS -->
@@ -102,9 +123,7 @@
     <rect x="70" y="345" width="270" height="115" rx="10" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5"/>
     <text x="82" y="366" fill="#0e7490" font-size="12.5" font-weight="bold">大亮 chassis-gateway</text>
     <g font-size="10.5" fill="#083344">
-      <text x="82" y="384">（常开 SBC / 工控机，与 4090 隔离）</text>
-      <text x="82" y="404">Python · 底盘协议 ↔ MCP 工具</text>
-      <text x="82" y="424">连 底盘 WS:6060 / MQTT:1883</text>
+      <text x="82" y="384">（常开 SBC / 工控机，与 4090 隔离）</text>      <text x="82" y="404">Python · 底盘协议 ↔ MCP 工具</text>      <text x="82" y="424">连 底盘 WS:6060 / MQTT:1883</text>
       <text x="82" y="444">心跳看门狗 → softScram</text>
     </g>
 
@@ -112,11 +131,11 @@
     <rect x="450" y="345" width="330" height="115" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.5"/>
     <text x="462" y="366" fill="#6d28d9" font-size="12.5" font-weight="bold">Pepper 端侧网关机</text>
     <g font-size="10.5" fill="#3b0764">
-      <text x="462" y="384">（实验室服务器 / 同网 SBC，与 Pepper 分离）</text>
+      <text x="462" y="384">（Windows x86 主机：pynaoqi 为 win32 构建）</text>
       <text x="462" y="404">suiyue-pepper 主网关（Py3.13）</text>
       <text x="478" y="422">└ WS 连云端大脑</text>
-      <text x="462" y="442">qi-bridge 子进程（Python 2.7）</text>
-      <text x="478" y="460">└ qi.Session → broker :9559</text>
+      <text x="462" y="442">qi-bridge 子进程（Python 2.7 · 32 位 x86）</text>
+      <text x="478" y="460">└ 本地 TCP :9560 → qi.Session → broker :9559</text>
     </g>
 
     <!-- 本体：Otto -->
@@ -144,15 +163,16 @@
     </g>
 
     <!-- 本体：大亮 -->
-    <rect x="480" y="490" width="360" height="150" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <rect x="480" y="490" width="360" height="172" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
     <text x="492" y="512" fill="#9a3412" font-size="13" font-weight="bold">大亮（双硬件本体）</text>
     <g font-size="10.5" fill="#431407">
       <text x="492" y="534">Android 上位机 · companion-app</text>
       <text x="508" y="552">（VendorSdkBridge 唯一厂商依赖）</text>
       <text x="492" y="572">EGO AGV 底盘 · L4 明文协议</text>
       <text x="492" y="592">双轮 SLAM ±2cm · 5 DOF</text>
-      <text x="492" y="612">表现层经 chassis-gateway 驱动</text>
-      <text x="492" y="630">geofence 禁入卧室/卫生间</text>
+      <text x="492" y="612">底盘动作经 chassis-gateway 驱动</text>
+      <text x="492" y="630">表情/听/说/看 由 companion-app 独立负责</text>
+      <text x="492" y="650">geofence（region 虚拟墙）禁入卧室/卫生间</text>
     </g>
 
     <!-- 本体：Pepper -->
@@ -174,7 +194,7 @@
       <rect x="190" y="700" width="16" height="16" rx="3" fill="#eef2ff" stroke="#6366f1"/>
       <text x="212" y="713">网络基础设施</text>
       <rect x="340" y="700" width="16" height="16" rx="3" fill="#ecfeff" stroke="#0891b2"/>
-      <text x="362" y="713">端侧网关(SBC)</text>
+      <text x="362" y="713">端侧网关(大亮: SBC)</text>
       <rect x="500" y="700" width="16" height="16" rx="3" fill="#fff7ed" stroke="#ea580c"/>
       <text x="522" y="713">机器人本体</text>
       <rect x="640" y="700" width="16" height="16" rx="3" fill="#fef2f2" stroke="#dc2626" stroke-dasharray="4,3"/>
@@ -184,8 +204,111 @@
       <line x1="980" y1="708" x2="1010" y2="708" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6,4"/>
       <text x="1016" y="713">Pepper 本地 IPC→broker</text>
     </g>
-    <text x="40" y="738" font-size="10.5" fill="#64748b">部署要点：chassis-gateway 与 Pepper 网关机均为「外移到常开 SBC」优先（ADR-011 §决策3），可与 4090 同机但须独立进程/容器；所有端侧 OS 对云端透明，换/加本体不改云端。</text>
+    <text x="40" y="738" font-size="10.5" fill="#64748b">部署要点：两个端侧网关均「外移到常开设备」，与 4090 隔离（ADR-011 §决策3）——但载体不同：大亮 chassis-gateway 可跑树莓派/工控机（纯 websockets 库）；Pepper 网关机<tspan fill="#7c3aed" font-weight="bold">必须是 Windows x86</tspan>（pynaoqi 为 win32-vs2013 构建，.pyd 仅 32 位可加载），不能用 ARM 树莓派。所有端侧 OS 对云端透明，换/加本体不改云端。</text>
   </svg>
+
+  <h2 style="font-size:16px; margin:20px 0 8px;">部署清单：要拷贝/要启动的文件</h2>
+  <p class="sub">路径相对 <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">suiyue/</code> 仓库根。
+  「启动」列为该机上实际要跑的命令；<code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">—</code> 表示该件不需独立启动（被上游拉起或纯配置）。</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:15%">机器</th>
+        <th style="width:19%">组件</th>
+        <th style="width:30%">要部署的文件 / 目录</th>
+        <th style="width:36%">启动</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td rowspan="4"><b>4090 服务器</b><br><span class="tag tag-blue">Linux/Win</span></td>
+        <td>云端大脑<br><span class="muted">xiaozhi fork</span></td>
+        <td><code>brain/</code> 挂载进<br><code>xiaozhi-esp32-server/</code></td>
+        <td>随 xiaozhi server 启动；WS 接入 <code>:8000</code>、OTA <code>:8003</code></td>
+      </tr>
+      <tr>
+        <td>MCP stdio 服务<br><span class="muted">四本体能力注册表</span></td>
+        <td><code>brain/mcp/</code>（<code>__main__.py</code>、<code>server.py</code>、<code>config.yaml</code>）</td>
+        <td><code>python -m brain.mcp --config brain/mcp/config.yaml</code><br><span class="muted">由 xiaozhi server 以 stdio MCP server 拉起</span></td>
+      </tr>
+      <tr>
+        <td>场景包</td>
+        <td><code>brain/packs/{elder_cn_v1, pepper_cn_v1, kids_v1}/</code></td>
+        <td><code>—</code>（被 <code>brain/mcp</code> 按 device_model 加载）</td>
+      </tr>
+      <tr>
+        <td>能力注册表</td>
+        <td><code>brain/capabilities/*.yaml</code><br><span class="muted">otto / reachy_mini / daliang / pepper</span></td>
+        <td><code>—</code>（被 <code>brain/core/capability.py</code> 读取）</td>
+      </tr>
+
+      <tr>
+        <td rowspan="1"><b>大亮网关机</b><br><span class="tag tag-cyan">SBC / 工控机</span></td>
+        <td>chassis-gateway</td>
+        <td><code>daliang/chassis-gateway/</code> 整目录<br>（<code>daliang_gateway/</code> + <code>requirements.txt</code>）</td>
+        <td>进程入口 <code>daliang_gateway/gateway.py</code> → <code>daliang_gateway/mock_server.py</code>（无真机时）<br><span class="muted">仅需 <code>websockets</code>；测试 <code>python -m unittest test_protocol</code></span></td>
+      </tr>
+
+      <tr>
+        <td rowspan="3"><b>Pepper 网关机</b><br><span class="tag tag-purple">Windows x86</span></td>
+        <td>主网关 <span class="muted">Py3.13</span></td>
+        <td><code>pepper/gateway.py</code>、<code>pepper/gateway_config.py</code>、<code>pepper/requirements.txt</code></td>
+        <td><code>pepper_gateway.bat</code><br><span class="muted">或 <code>start_pepper_debug.bat</code>（含 --auto-bridge 一键拉起）</span></td>
+      </tr>
+      <tr>
+        <td>qi-bridge <span class="muted">Py2.7 · 32 位</span></td>
+        <td><code>pepper/naoqi_bridge/</code> 整目录<br>（<code>bridge.py</code>、<code>motion/navigation/tablet/vision/audio</code>、<code>config.py</code>）</td>
+        <td><code>pepper_bridge.bat</code> → 监听本地 TCP <code>:9560</code></td>
+      </tr>
+      <tr>
+        <td>SDK（不入 git）</td>
+        <td><code>pynaoqi-python2.7-2.5.7.1-win32-vs2013/</code><br><span class="muted">仓库根；<code>lib</code>→PYTHONPATH、<code>bin</code>+<code>lib</code>→PATH</span></td>
+        <td><code>—</code>（被 qi-bridge import）<br><span class="muted">需 <b>32 位</b> Python 2.7；<code>test_bridge_client.py</code> 为 Py3 自测客户端</span></td>
+      </tr>
+
+      <tr>
+        <td><b>Otto</b><br><span class="tag tag-orange">ESP32-S3</span></td>
+        <td>固件 overlay</td>
+        <td><code>firmware-esp32/</code>（<b>待 fork</b>，当前仅 <code>firmware-esp32/FORK.md</code> 占位：fork 命令与改造点）</td>
+        <td><code>—</code>（烧录进 ESP32；OTA 指向 <code>:8003</code>）</td>
+      </tr>
+      <tr>
+        <td><b>Reachy Mini</b><br><span class="tag tag-orange">树莓派5</span></td>
+        <td>端侧客户端</td>
+        <td><code>client-py/</code>（<b>待 fork</b>，当前仅 <code>client-py/FORK.md</code> 占位）</td>
+        <td><code>—</code>（跑在本体自带树莓派 5）</td>
+      </tr>
+      <tr>
+        <td><b>大亮本体</b><br><span class="tag tag-orange">Android + AGV</span></td>
+        <td>companion-app</td>
+        <td><code>daliang/companion-app/</code>（Kotlin，<b>待尽调</b>，当前仅 README）</td>
+        <td>APK 装入上位机；规划中 <code>app/src/main/java/suiyue/daliang/bridge/VendorSdkBridge.kt</code> 为唯一厂商依赖点</td>
+      </tr>
+      <tr>
+        <td><b>Pepper 本体</b><br><span class="tag tag-orange">NAOqi 2.5.10.7</span></td>
+        <td>本体固件</td>
+        <td><code>—</code>（<span class="muted">不装任何岁悦代码，只作 I/O 与执行终端</span>）</td>
+        <td><code>—</code>（NAOqi 自带；broker <code>:9559</code>）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 style="font-size:16px; margin:20px 0 8px;">仓库目录 ↔ 图中角色对照</h2>
+  <table>
+    <thead>
+      <tr><th style="width:34%">路径</th><th style="width:20%">图中角色</th><th>上游 / 说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>brain/</code></td><td>云端大脑（4090）</td><td>fork 自 <code>xinnan-tech/xiaozhi-esp32-server</code>（MIT）</td></tr>
+      <tr><td><code>daliang/chassis-gateway/</code></td><td>端侧网关（大亮：SBC）</td><td>自研；Mock Server 已与真机协议同构</td></tr>
+      <tr><td><code>daliang/companion-app/</code></td><td>大亮本体（Android）</td><td>参考 <code>xuan2261/xiaozhi-ai-android</code>；待尽调</td></tr>
+      <tr><td><code>pepper/</code></td><td>Pepper 端侧（网关机 + 桥）</td><td>自研（<code>pynaoqi</code> SDK），非 fork</td></tr>
+      <tr><td><code>firmware-esp32/</code></td><td>Otto 本体</td><td>fork 自 <code>78/xiaozhi-esp32</code>（MIT）</td></tr>
+      <tr><td><code>client-py/</code></td><td>Reachy 本体</td><td>fork 自 <code>huangjunsen0406/py-xiaozhi</code>（MIT）</td></tr>
+      <tr><td><code>course/</code> · <code>e2e/</code> · <code>hardware/</code></td><td>（不部署）</td><td>课程包 / 10 句验收话术 / BOM 文档</td></tr>
+    </tbody>
+  </table>
 </div>
 </body>
 </html>

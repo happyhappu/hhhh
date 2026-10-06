@@ -26,7 +26,15 @@ class DaliangChassisClient:
         self._task: Optional[asyncio.Task] = None
 
     async def connect(self) -> None:
-        self.ws = await websockets.connect(self.url)
+        # 底盘是内网/局域网地址，绝不能走 HTTP 代理。
+        # websockets>=14 的connect() 默认读环境变量 http_proxy/https_proxy，
+        # 若部署机设了代理（机房/企业网常见）而 no_proxy 未覆盖内网网段，
+        # 连接会被代理接管并以 502 失败 —— 这对"100% 内网离线部署"是硬伤。
+        # 故显式 proxy=None；旧版 websockets 无该参数则退回默认调用。
+        try:
+            self.ws = await websockets.connect(self.url, proxy=None)
+        except TypeError:
+            self.ws = await websockets.connect(self.url)
         self._task = asyncio.ensure_future(self._recv())
 
     async def close(self) -> None:

@@ -101,6 +101,12 @@ LLM:
 - [ ] **3.3 大亮底盘**
   - [ ] `chassis-gateway` 已启动，连 `ws://192.168.31.7:6060`
   - [ ] `self.daliang.*` 工具已在云端 MCP 注册
+  - [ ] **内网 WS 不得走 HTTP 代理**：确认部署机未把 `ws://192.168.31.7:6060` 交给代理。
+        `websockets>=14`的 `connect()` 默认读 `http_proxy`/`https_proxy` 环境变量，
+        若机房/企业网设了代理而 `no_proxy` 未覆盖内网网段，底盘连接会被代理接管并以 502 失败。
+        代码侧已在 `daliang_gateway/client.py: connect()` 显式 `proxy=None` 兜底；
+        此处用于**确认部署环境**没有其它代理层（企业防火墙 / 网关白名单）拦截内网 WS。
+  - [ ] 同样适用于 Pepper 端侧 `naoqi_bridge`（走 `tcp://<pepper-ip>:9559`，不经代理，但需确认防火墙放行 9559）
 - [ ] **3.4 Pepper（NAOqi 人形）**
   - [ ] WS 音频链路指向内网服务器（xiaozhi 协议，与 Otto/Reachy 同）
   - [ ] **禁用 Pepper 内置云端 ASR/TTS/Dialogue**，主链路走云端 xiaozhi + GPT-SoVITS

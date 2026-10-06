@@ -1,6 +1,8 @@
 # 岁悦系统架构（v1）
 
-> 对应决策：ADR-002（四本体一脑）、ADR-003（小智协议+MCP）、ADR-004（情感意图抽象）、ADR-009（大亮双网关）。
+> 对应决策：ADR-002（四本体一脑）、ADR-003（小智协议+MCP）、ADR-004（情感意图抽象）、ADR-009（大亮双网关）、
+> ADR-011（全离线部署基线）、ADR-012（场景包加载与选择）。
+> 物理拓扑（含各网关实际载体）：`docs/物理部署图.html`。
 
 ## 1. 总览
 
@@ -11,9 +13,11 @@
                     │                                            │
                     │  接入网关(WS) → 会话编排(Intent Router)     │
                     │      ├─ LLM 路由：8B 快模型 / 14B 高价值     │
-                    │      ├─ 记忆三层：Redis 短期 / 向量库长期   │
-                    │      │   / MySQL 结构化画像                 │
-                    │      └─ 场景包 packs/elder_cn_v1 ...        │
+                    │      ├─ 记忆三层（server-only 基线用        │
+                    │      │   mem_local_short 文件缓存；           │
+                    │      │   Redis 短期 / 向量库长期 /           │
+                    │      │   MySQL 画像 仅全模块版，见 ADR-011） │
+                    │      └─ 场景包 packs/ 按 device_model 选     │
                     │  能力注册表 capabilities/（device → 能力） │
                     └───────────────┬──────────────┬──────────────┘
                                     │ 小智协议 + MCP
@@ -22,10 +26,11 @@
 ┌───────▼────────┐    ┌─────────────▼───────┐  ┌──────▼────────┐  ┌───────▼────────┐
 │ Otto            │    │ Reachy Mini          │  │ 大亮           │  │ Pepper           │
 │ firmware-esp32/ │    │ client-py/           │  │ chassis-gateway│  │ pepper/          │
-│                │    │                     │  │ + companion-app│  │ (NAOqi 端侧全栈) │
+│                │    │                     │  │ + companion-app│  │ (NAOqi 执行终端) │
 │ ESP32-S3 固件   │    │ 树莓派5 Python       │  │ 见 §4 拆分     │  │ 1.2m 三轮人形    │
-│ {emotion,int.} │    │ {emotion,int.}       │  │ {emotion,int., │  │ {emotion,int.,   │
-│ → 双足动作      │    │ → 头/天线/LED        │  │  primitive,params}│  │  primitive,params}│
+│ {emotion,int.} │    │ {emotion,int.}       │  │ {emotion,int., │  │ 主机见 §4.1     │
+│ → 双足动作      │    │ → 头/天线/LED        │  │  primitive,params}│  │ {emotion,int.,   │
+│                │    │                     │  │                │  │  primitive,params}│
 └────────────────┘    └─────────────────────┘  └────────────────┘  └────────────────┘
 ```
 
@@ -37,9 +42,11 @@
 ```
 老人开口（免唤醒，VAD 人声门控 + 视觉在场门控）
  → 端侧拾音，Opus 编码，WS 上行
- → 云端 ASR（Paraformer）→ 文本
+ → 云端 ASR（FunASR SenseVoiceSmall）→ 文本
  → Intent Router：闲聊走 8B，健康/情感/安全走 14B（24GB 单卡档位，见 ADR-011）
- → 上下文组装：Redis 短期(10轮) + 向量库召回(top-5) + MySQL 画像标签
+ → 上下文组装：短期记忆(10轮) + 向量召回(top-5) + 画像标签
+                （本期 server-only：mem_local_short 文件缓存；
+                  Redis / MySQL 属全模块版，见 ADR-011 §决策 1）
  → LLM 生成：{reply 文本, emotion, intensity, [action_primitive]}
  → TTS 流式下行 + 意图并行下行
  → 端侧：扬声器播报 ∥ 编排器查能力注册表 → 本体动作
@@ -55,7 +62,11 @@
 | `client-py/` | Reachy 端侧全栈（音频/UI/动作 MCP 工具） | 对话决策 |
 | `daliang/chassis-gateway/` | 底盘协议 ↔ MCP 工具的翻译层 + Mock Server | 语音/屏幕/表情（那是 companion-app 的事） |
 | `daliang/companion-app/` | 大亮表现层（听/说/看/表情），`VendorSdkBridge` 为唯一厂商依赖点 | 底盘运动（经 chassis-gateway） |
-| `pepper/` | Pepper 端侧全栈（NAOqi 音频/UI/动作/导航 MCP 工具） | 对话决策 |
+| `pepper/` | Pepper 端侧（主网关 Py3.13 + qi-bridge Py2.7：音频/UI/动作/导航 MCP 工具） | 对话决策 |
+
+> `pepper/` 虽名为"端侧"，但**主网关与 qi-bridge 都跑在本体之外的 Windows x86 主机**
+> （pynaoqi 为 win32-vs2013 构建，仅 32 位可加载）——Pepper 本体只当 I/O 与执行终端。
+> 详见 `pepper/README.md` §2.1。
 
 ## 4. 大亮的特殊架构（双网关拆分）
 
@@ -66,6 +77,22 @@
 
 依赖纪律：`companion-app` 里 **`bridge/VendorSdkBridge.kt` 是唯一允许 import 厂商 SDK 的文件**，其余代码只面向自有接口 `SuiyueSurface`。
 
+> ⚠️ **职责边界易错点**：底盘动作走 `chassis-gateway`，但**表情/听/说/看一律归 `companion-app`**。
+> `chassis-gateway` 绝不负责语音/屏幕/表情；纯表情意图（无 `action_primitive`）时底盘保持原地，
+> 由编排器委派给 companion-app（见 `brain/daliang_provider/orchestrator.py`）。
+
+## 4.1 Pepper 的两段式端侧（与 §4 同理，但载体不同）
+
+Pepper = NAOqi 人形（弱算力 + 官方 `qi` SDK 仅 Py2.7）。因此**把本体拆成"执行终端 + 外置主机"两段**：
+
+- **执行终端（Pepper 本体）**：麦克风/扬声器 I/O + NAOqi proxy 执行，纯瘦客户端，不跑 LLM/ASR/TTS；
+- **外置主机（Windows x86）**：`suiyue-pepper` 主网关（Py3.13，扮演小智 client 连云端 WS）
+  + `qi-bridge` 子进程（Py2.7 **32 位**，经**本地 TCP 127.0.0.1:9560 JSON 行**派发动作原语）。
+
+⚠️ **载体约束**：Py2.7 `pynaoqi` 为 `win32-vs2013` 构建，`_qi.pyd` 仅 32 位可加载 →
+**网关机必须是 Windows x86，不能用 ARM 树莓派/SBC**。这与大亮的「外移到树莓派/工控机」不同，
+两者不可混为一谈。物理拓扑见 `docs/物理部署图.html`。
+
 ## 5. 部署形态（两套，接口隔离）
 
 | 形态 | 场景 | 算力 | 网络 |
@@ -75,7 +102,7 @@
 
 机器人端只认一个 API 契约（`docs/MCP-CONTRACT.md`），不关心背后是 4090 还是云。
 
-> 离线基线、24GB 显存预算与七项隐形联网点：`adr/ADR-011-全离线部署基线.md`
+> 离线基线、24GB 显存预算与八项隐形联网点：`adr/ADR-011-全离线部署基线.md`
 > 可执行勾选清单：`docs/OFFLINE-CHECKLIST.md`
 
 ## 6. 隐私与安全底线（酌情保障档）
@@ -84,5 +111,4 @@
 - 机器人必须在**无摄像头**模式下跑通完整陪伴链路（视觉是可选增强）；
 - 大亮 geofence：`region` 虚拟墙做卧室/卫生间禁入；
 - 底盘软急停 `softScram` 挂到云端 `stop_all` 工具，任何 Agent 可调用。
-- Pepper（NAOqi 三轮人形）：自带防跌倒（机身倾斜即切断电机），但失联看门狗仍须停运动（`self.pepper.stop_all`）；NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似 geofence；**禁用 Pepper 内置云端 ASR/TTS/Dialogue**，改云端 xiaozhi + GPT-SoVITS（见 ADR-011 §决策 4.8）。
-- Pepper（NAOqi 三轮人形）：自带防跌倒（机身倾斜即切断电机），但失联看门狗仍须停运动（`self.pepper.stop_all`）；NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似 geofence；**禁用 Pepper 内置云端 ASR/TTS/Dialogue**，改云端 xiaozhi + GPT-SoVITS（见 ADR-011 §决策 4.8）。
+- Pepper（NAOqi 三轮人形）：自带防跌倒（机身倾斜即切断电机），失联看门狗**已在 qi-bridge 实现**（主网关 > 15s 无心跳 → 自动 `self.pepper.stop_all`，见 `naoqi_bridge/config.py` `WATCHDOG_TIMEOUT_S`）；NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似 geofence；**禁用 Pepper 内置云端 ASR/TTS/Dialogue**，改云端 xiaozhi + GPT-SoVITS（见 ADR-011 §决策 4 第 8 项）。

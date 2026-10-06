@@ -13,14 +13,13 @@
 | 大亮底盘网关 | `daliang/chassis-gateway/` | EGO 底盘 WS/MQTT 协议 → MCP 工具，含 Mock Server | 自研 | Apache-2.0 | 骨架已建 |
 | 大亮上位机 App | `daliang/companion-app/` | Android 原生 Kotlin 表现层 APK | 参考 `xuan2261/xiaozhi-ai-android` | Apache-2.0 | 待尽调后启动 |
 | Pepper 端侧 | `pepper/` | NAOqi 桥（音频/UI/动作/导航 MCP 工具），Python | 自研（naoqi SDK） | Apache-2.0 | 方案已建，待 P0 确认 |
-| Pepper 端侧 | `pepper/` | NAOqi 桥（音频/UI/动作/导航 MCP 工具），Python | 自研（naoqi SDK） | Apache-2.0 | 方案已建，待 P0 确认 |
 | 硬件 | `hardware/` | Otto BOM、Reachy 加屏结构件、外挂交互头（Plan B） | Otto DIY（CERN-OHL-S 兼容） | CERN-OHL-S | 文档 |
 | 课程包 | `course/` | 12+2 讲课程、实验手册、验收标准 | 自研 | CC BY-SA | 大纲已建 |
 | 端到端验收 | `e2e/` | 10 句测试话术、延迟与稳定性指标 | 自研 | CC BY-SA | 骨架已建 |
 
 设计决策完整版见 `docs/adr/`（ADR-001 ~ 011）与上级目录的四份设计文档。
 
-**部署基线（必读）**：全系统默认 **全离线（air-gapped）** —— 小智云端 + 本地大模型 + chassis-gateway 全部跑在自有 4090 单卡上，不依赖任何公网 API。24GB 显存预算、LLM 路由档位与七项隐形联网点见 `docs/adr/ADR-011-全离线部署基线.md`；部署与验收走 `docs/OFFLINE-CHECKLIST.md`。
+**部署基线（必读）**：全系统默认 **全离线（air-gapped）** —— 小智云端 + 本地大模型 + chassis-gateway 全部跑在自有 4090 单卡上，不依赖任何公网 API。24GB 显存预算、LLM 路由档位与八项隐形联网点见 `docs/adr/ADR-011-全离线部署基线.md`；部署与验收走 `docs/OFFLINE-CHECKLIST.md`；物理拓扑见 `docs/物理部署图.html`；**4090 逐条执行清单**（含"现在就能做/ 上机后做"两段）见 `docs/DEPLOY-4090.md`；**离线物料准备清单**（air-gapped 前必做，附 v0.9.7 真实配置行号）见 `docs/OFFLINE-MATERIALS.md`。
 
 ## 分层架构（一句话版）
 
