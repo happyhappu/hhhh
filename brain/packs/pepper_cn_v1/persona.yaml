@@ -41,5 +41,29 @@ memory:
   profile_fields_whitelist: ../profile_whitelist.yaml
   confirm_before_save: [health_condition, family_relation]
 
+# ---- 情绪表达契约（1.3 增强，2026-10-06）----
+# 【为什么需要这一段】云端 v0.9.7 的 `core/utils/textUtils.py:84 get_emotion()`
+# 判定情绪的方式是**扫描 LLM 回复文本里的第一个 emoji**，用 EMOJI_MAP
+# （21 个标签）翻成 emotion 下发给端侧。也就是说：
+#   **LLM 不吐 emoji -> 永远 neutral -> Pepper 永远 Stand 不动。**
+# 端侧翻译层已修（pepper/gateway_config.py::SERVER_EMOTION_TO_SUYUE），
+# 但那只解决"标签对得上"，还得让 LLM **真的产出**对应 emoji。
+# 故在此显式声明"什么情绪用什么 emoji"，由 overlay X3 注入 prompt。
+expression:
+  # 约束：每轮回复**必须**以一个情绪 emoji 开头（server 只扫第一个字符）。
+  # 映射必须 ⊆ 云端 EMOJI_MAP 的 21 个标签，否则会被静默忽略。
+  emoji_map:
+    happy: "🙂"
+    excited: "😆"
+    soothing: "😌"
+    curious: "🤔"
+    concerned: "😠"
+    neutral: "😶"
+  # 兜底：不确定时用 neutral（😶）而不是不带表情——
+  # 因为"无 emoji"在 server 侧等价于 neutral，但不会走我们的映射路径。
+  fallback_emoji: "😶"
+  # 适老化约束：老人设备上 emoji 会朗读/显示，需克制（每轮 1 个，勿堆叠）。
+  max_per_turn: 1
+
 reminders:
   default_style: 关怀而非指令

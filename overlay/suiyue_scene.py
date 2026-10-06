@@ -13,6 +13,9 @@
     暴露给 LLM 会导致它调用不存在的工具而中断对话。
   - **字段路径**：返回体 persona 是双层嵌套 -> `scene["persona"]["persona"]["name"]`。
   - `emotion_calibration` 不进 prompt（端侧 emotion->motion 曲线，与 LLM 文本无关）。
+  - `persona.expression` **进** prompt（2026-10-06 新增）：云端 `get_emotion()`
+    靠扫描 LLM 回复里的第一个 emoji 判定情绪，LLM 不吐 emoji 则恒 `neutral`、
+    本体恒静默不动，故必须显式给出"什么情绪用什么 emoji"。
 
 被上游调用示例（connection.py::_init_prompt_enhancement）：
     from suiyue_scene import inject_scene_into_prompt
@@ -93,6 +96,19 @@ def render_scene_prompt(scene: Dict[str, Any]) -> str:
         sp = (ag.get("system_prompt") or "").strip()
         if sp:
             blocks.append("【%s】%s" % (ag.get("name") or "agent", sp))
+
+    # 情绪表达契约（1.3 增强）
+    # 云端 get_emotion() 靠"扫描 LLM 回复里的第一个 emoji"判定情绪，
+    # 不吐 emoji -> 恒 neutral -> 本体恒静默不动。这段把映射显式告诉 LLM。
+    expr = (persona.get("expression") or {})
+    emap = expr.get("emoji_map") or {}
+    if emap:
+        pairs = "、".join("%s→%s" % (k, v) for k, v in emap.items())
+        blocks.append(
+            "【情绪表达】每轮回复**必须**以一个情绪 emoji 开头（只用下列，不要堆叠）：%s"
+            % pairs)
+        if expr.get("fallback_emoji"):
+            blocks.append("不确定情绪时用 %s，不要省略 emoji。" % expr["fallback_emoji"])
 
     # 安全硬规则（护栏，必须在）
     safety = scene.get("safety") or {}

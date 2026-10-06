@@ -93,6 +93,34 @@ class TestRenderScenePrompt(unittest.TestCase):
         self.assertEqual(render_scene_prompt({}), "")
         self.assertEqual(render_scene_prompt(None), "")
 
+    def test_render_includes_expression_contract(self):
+        """1.3：必须把「什么情绪用什么 emoji」告诉 LLM。
+
+        否则云端 get_emotion() 扫不到 emoji -> 恒 neutral -> Pepper 恒静默。
+        """
+        expr = self.scene["persona"].get("expression") or {}
+        self.assertTrue(expr.get("emoji_map"), "场景包缺少 expression.emoji_map")
+        r = render_scene_prompt(self.scene)
+        self.assertIn("情绪表达", r)
+        for emo, emoji in expr["emoji_map"].items():
+            self.assertIn(emoji, r, "prompt里缺少 %s 的 emoji %s" % (emo, emoji))
+        self.assertIn(expr["fallback_emoji"], r)
+
+    def test_expression_emoji_subset_of_upstream_map(self):
+        """注入的 emoji 必须是云端 EMOJI_MAP 认的，否则被静默忽略。
+
+        云端 EMOJI_MAP 见 v0.9.7 core/utils/textUtils.py:8-30；
+        这里用同文件 pepper/test_emotion_contract.py 的权威副本。
+        """
+        from pepper.test_emotion_contract import UPSTREAM_EMOJI_MAP
+        expr = self.scene["persona"].get("expression") or {}
+        emap = dict(expr.get("emoji_map") or {})
+        if expr.get("fallback_emoji"):
+            emap["__fallback__"] = expr["fallback_emoji"]  # 兜底 emoji 也要合法
+        for emo, emoji in emap.items():
+            self.assertIn(emoji, UPSTREAM_EMOJI_MAP,
+                          "云端不认识的 emoji：%s=%s（会被静默忽略）" % (emo, emoji))
+
 
 class TestInjectScene(unittest.TestCase):
     """注入器行为测试（含真实 stdio 一次，约 13s，故单独标注）。"""
