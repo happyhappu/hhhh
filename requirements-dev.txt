@@ -1,0 +1,17 @@
+# 岁悦开发/测试依赖（大脑 + 大亮网关 + e2e）
+#
+#   pip install -r suiyue/requirements-dev.txt
+#
+# 运行时按组件另有requirements.txt：
+#   suiyue/pepper/requirements.txt            端侧主网关（websocket-client）
+#   suiyue/daliang/chassis-gateway/requirements.txt  底盘网关（websockets）
+
+# 大亮底盘网关 / 编排器 / MCP server 的 WS 传输与 e2e（>=14 才有proxy 参数，
+# 客户端已显式 proxy=None 避免内网地址被http_proxy 接管）
+websockets>=14.0
+
+# 场景包加载器（brain/packs/loader.py）解析 YAML
+PyYAML>=6.0
+
+# 端侧 Pepper 主网关连云端 xiaozhi WS
+websocket-client>=1.7
