@@ -51,6 +51,24 @@ def _print_reactions(title: str, results: dict) -> None:
             print(f"      说明:     {r.note}")
 
 
+def _print_scenes(title: str, brain) -> None:
+    """展示每个已注册本体的已选场景包（persona / agents / 安全护栏）。"""
+    print(f"\n=== {title} ===")
+    for did in brain.device_ids:
+        sc = brain.get_scene(did)
+        if sc is None:
+            print(f"  • {did}: (无场景包)")
+            continue
+        persona = sc.get("persona", {}).get("persona", {})
+        agents = [a["name"] for a in sc.get("agents", [])]
+        hard = sc.get("safety", {}).get("hard_rules", [])
+        print(f"  • {did}  →  {sc.get('scene_pack')} (model={sc.get('device_model')})")
+        print(f"      人格名: {persona.get('name')} ｜ 音色: {persona.get('voice')}")
+        print(f"      Agents: {agents}")
+        print(f"      安全硬规则数: {len(hard)} ｜ emotion_calibration: "
+              f"{list((sc.get('emotion_calibration') or {}).keys())}")
+
+
 async def main() -> None:
     server, world, port = await _start_mock_chassis()
 
@@ -70,9 +88,12 @@ async def main() -> None:
     brain.register("otto-01", "otto_v1")               # 模拟固件
     brain.register("reachy-01", "reachy_mini_v1")      # 模拟固件
     brain.register("daliang-01", "daliang_v1", daliang)  # 实时底盘
-    brain.register("pepper-01", "pepper_v1")              # 模拟固件（NAOqi 网关未起时按注册表解析）
+    brain.register("pepper-01", "pepper_v1")              # 模拟固件（NAOqi 网关未起时按注册表解析）；与生产 MCP config.yaml 的 pepper-01 一致
 
     print("注册设备:", brain.device_ids)
+
+    # 各自场景包：同一大脑，四个身体的 persona / agents / 安全护栏不同
+    _print_scenes("场景零 · 四本体各自场景包（G5 场景加载器）", brain)
 
     # 场景一：老人讲了个高兴的事 —— 同一句话，四种反应
     intent_happy = {"emotion": "happy", "intensity": 0.8}

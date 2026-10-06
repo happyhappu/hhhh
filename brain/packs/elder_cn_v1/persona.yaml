@@ -20,7 +20,7 @@ persona:
 emotion_calibration:
   happy:    {gain: 1.0, max: 0.9}
   soothing: {gain: 0.8, max: 0.7}
-  concerned:{gain: 1.0, max: 0.8}
+  concerned: {gain: 1.0, max: 0.8}
 
 memory:
   profile_fields_whitelist: ../profile_whitelist.yaml   # 画像白名单（防幻觉，见 ADR-008）

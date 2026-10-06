@@ -1,0 +1,33 @@
+# 物理动作能力声明：pepper_cn_v1
+# 对齐 pepper_v1.yaml action_space / emotion_mapping；供编排器按能力裁剪意图。
+
+physical_caps:
+  form: mobile_humanoid_naoqi
+  dof: 20
+  has_tablet: true
+  has_face_camera: true          # RGB-D 额头，可用于人脸/深度
+  channels: [audio_in, audio_out, action, screen, mobility]
+
+  conservative_subset:           # 老人场景允许子集（展示模式外）
+    - wave
+    - show_tablet
+    - posture_stand
+    - posture_crouch
+    - head_nod
+    - head_shake
+    - approach
+    - patrol
+
+  showcase_only:                 # 仅展示，老人场景禁用
+    - hug
+    - dance
+    - push
+    - tai_chi
+
+  emotion_to_motion:             # 与 pepper_v1.yaml emotion_mapping 一致
+    happy:     approach_and_wave
+    soothing:  posture_crouch
+    curious:   head_tilt
+    concerned: approach_and_wait
+    excited:   approach_and_wave
+    neutral:   none

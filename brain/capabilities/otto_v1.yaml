@@ -18,7 +18,11 @@ action_space:
     - bow            # 鞠躬
     - shy            # 害羞（被夸时）
   showcase_only:              # 仅演示模式，老人场景禁用（防翻倒）
-    - jump, moonwalk, updown, flap, magic_circle  # 以固件枚举为准
+    - jump
+    - moonwalk
+    - updown
+    - flap
+    - magic_circle  # 以上均以固件枚举为准
 
 emotion_mapping:
   happy:     {actions: [swing, waving],      intensity_to: amplitude}

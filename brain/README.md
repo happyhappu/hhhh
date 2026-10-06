@@ -4,24 +4,44 @@ fork 自 `xinnan-tech/xiaozhi-esp32-server`（MIT）。第一学期用小智模�
 
 ```
 brain/
-├── packs/                  # 场景包（ADR-007，热切换）
+├── packs/                  # 场景包（ADR-007，热切换；按 device_model 选包）
 │   ├── elder_cn_v1/        # 老人场景（本学期主战场）
-│   └── kids_v1/            # 小学生 PoC（插槽验证）
+│   │   ├── persona.yaml / safety.yaml
+│   │   └── agents/health.yaml
+│   ├── pepper_cn_v1/       # Pepper 场景
+│   │   ├── persona.yaml / safety.yaml
+│   │   ├── mobility.yaml / physical_caps.yaml   # 移动能力与物理边界
+│   │   └── agents/companion.yaml
+│   ├── kids_v1/            # 小学生 PoC（插槽验证）
+│   │   └── scene.yaml
+│   ├── loader.py           # 场景包加载 + 校验
+│   └── test_loader.py
 ├── capabilities/            # 能力注册表：device_model → 能力与动作空间
 │   ├── otto_v1.yaml
 │   ├── reachy_mini_v1.yaml
-│   └── daliang_v1.yaml
+│   ├── daliang_v1.yaml
+│   └── pepper_v1.yaml
+├── mcp/                     # MCP-CONTRACT server（挂到 xiaozhi-esp32-server fork）
+│   ├── __main__.py         # 启动入口：python -m brain.mcp
+│   ├── server.py           # 工具注册与分发（self.suiyue.* / self.daliang.*）
+│   ├── config.py / config.yaml
+│   ├── test_mcp.py
+│   ├── xiaozhi-mcp-settings.example.json   # 挂到小智 server 的配置样例
+│   ├── GET_SCENE_OVERLAY_GUIDE.md           # 场景 overlay 接入指引
+│   └── README.md
 ├── daliang_provider/        # 大亮本体云端编排层（意图→底盘命令 + 事件桥接）
 │   ├── orchestrator.py      # DaliangOrchestrator（MCP-CONTRACT §1 的大亮实现）
 │   └── test_chassis_orchestrator.py
 ├── core/                    # ★ 统一意图分发中枢（"一个大脑四个身体"云端侧）
 │   ├── capability.py        # 加载 capabilities/<model>.yaml
-│   ├── provider.py          # BodyProvider / StaticProvider（模拟固件）/ DaliangProvider（实时）
+│   ├── provider.py          # BodyProvider / StaticProvider（模拟固件）/ DaliangProvider（实时）/ is_mobile()
 │   ├── brain.py             # SuiyueBrain：按 device_id 路由 emote 意图
 │   ├── demo_four_bodies.py # 一句话四种反应演示（无需硬件）
 │   └── test_brain.py
 └── README.md
 ```
+
+> `pepper/`（主网关 Py3.13 + qi-bridge Py2.7）不在 `brain/` 内，部署时按 `../docs/物理部署图.html` 的「部署清单」执行。
 
 ## core（统一分发中枢，新增）
 

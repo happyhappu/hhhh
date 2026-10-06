@@ -1,0 +1,19 @@
+# 移动编队：pepper_cn_v1（Pepper 三轮全向底盘，ALNavigation 拓扑图）
+# 见 pepper_v1.yaml locomotion: naoqi_wheel；限速 0.4 m/s。
+# 字段为骨架：真实坐标待 ALNavigation 建图后填实（见 真机联调checklist.md §3/§5）。
+
+mobility:
+  speed_limit_mps: 0.4
+  geofence:
+    mode: naoqi_no_native        # NAOqi 无原生虚拟墙
+    forbidden_zones: [卧室, 卫生间]   # 用 ALNavigation 禁区近似；建图后填坐标
+  patrol:
+    enabled: false               # 联调期默认不巡游；演示可开
+    points:                      # 拓扑节点（ALNavigation node），真机建图后填
+      - {id: living_room, x: 0,   y: 0,   theta: 0}
+      - {id: sofa,        x: 1.2, y: 0.3, theta: 0}
+    loops: 1
+    speed: 0.3
+  approach:
+    default_distance_m: 0.3      # 走到身边停住的距离（礼仪，可调）
+    min_safe_m: 0.2

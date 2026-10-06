@@ -24,7 +24,7 @@ runtime:
   sdk_api: "qi (lib/qi) 或 naoqi (lib/naoqi.py·ALProxy)"  # 两套 API 同在包内
   gateway_main: python3.13        # suiyue-pepper 主网关（MCP 侧）
   qi_bridge: python2.7           # 末端 qi-bridge 子进程，连 Pepper broker :9559
-  ipc: local_websocket           # 主网关 ↔ qi-bridge 本地 IPC
+  ipc: local_tcp_jsonl           # 主网关 ↔ qi-bridge 本地 IPC：TCP 127.0.0.1:9560，JSON 行（utf-8 文本）
   boot_activation_required: false # 用户已确认：Pepper 开机无需联网激活 → air-gapped 成立
 channels: [audio_in, audio_out, action, screen, mobility]
 
@@ -44,7 +44,7 @@ naoqi:
     - ALTracker                   # 跟踪人体（可选）
     - ALTabletService             # 平板渲染 companion Web UI
     - ALNavigation                # 拓扑地图导航【可选·降级】：培训文档导航章走 ROS(naoqi_driver)，纯 qi 路径未实证；先用 ALMotion.moveTo + 基础避障
-  disabled_cloud_services:        # 离线必须关，见 ADR-011 §决策 4.8
+  disabled_cloud_services:        # 离线必须关，见 ADR-011 §决策第 8 项
     - ALSpeechRecognition         # 禁用内置 ASR；改走云端 xiaozhi FunASR（培训文档语音章未用内置识别，印证）
     - ALTextToSpeech              # 禁用内置 TTS；改走云端 GPT-SoVITS 流式（老年女声克隆）
     - ALDialog                    # 禁用 ALDialog(.top 规则引擎)；对话/意图改走云端 Intent Router
@@ -60,7 +60,10 @@ action_space:
     - head_nod           # 点头附和
     - head_shake         # 摇头/疑惑
   showcase_only:
-    - hug, dance, push, tai_chi   # 以 NAOqi 动画库为准
+    - hug
+    - dance
+    - push
+    - tai_chi   # 以上均以 NAOqi 动画库为准
 
 emotion_mapping:
   happy:     {motion: approach_and_wave, note: "靠近半步 + 挥手"}

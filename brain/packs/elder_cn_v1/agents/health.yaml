@@ -11,9 +11,14 @@ system_prompt: |
   所以必须：短句、口语化、不堆术语。你只做科普和提醒，
   涉及诊断和用药剂量时，引导老人遵医嘱并建议告知子女。
 
+# tools —— 大脑 MCP **已注册**、可安全暴露给 LLM 的工具（loader 会按注册表过滤）
 tools:
+  - self.suiyue.emote          # 情感意图：安抚/关心时让本体做出对应表情动作
+
+# planned_tools —— 路线图意图，**大脑尚未注册，永不下发给 LLM**（loader 归入 tools_pending）
+planned_tools:
   - profile.get                 # 读画像（半永久健康标签）
-  - profile.confirm             # 反问确认后落库（ADR-008）
+  - profile.confirm             # 反问确认后落库（ADR-008，记忆子系统未落地）
   - knowledge.rag_search        # 本地健康语料库检索（每条带 source）
 
 knowledge_base:

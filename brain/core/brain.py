@@ -11,14 +11,20 @@
 """
 from __future__ import annotations
 
-from typing import Optional
+import logging
+from typing import Iterable, Optional
 
 from .provider import BodyProvider, EmoteResult, StaticProvider
+from ..packs.loader import DEFAULT_SCENE, ResolvedPack, load_resolved, select_by_model
+
+log = logging.getLogger("suiyue.brain")
 
 
 class SuiyueBrain:
     def __init__(self) -> None:
         self._devices: dict[str, tuple[str, BodyProvider]] = {}
+        self.default_scene: str = DEFAULT_SCENE  # 未匹配模型/ PoC 演示回退（ADR-012 D4）
+        self._scene_cache: dict[str, Optional[ResolvedPack]] = {}  # key = scene 或 model
 
     def register(self, device_id: str, model: str, provider: Optional[BodyProvider] = None) -> BodyProvider:
         """注册一个设备。
@@ -56,3 +62,39 @@ class SuiyueBrain:
         """把某设备的事件交给其 provider 翻译为对话上下文。"""
         provider = self.get_provider(device_id)
         return await provider.handle_event(ev)
+
+    # ---------------- 场景包选择（G5 / ADR-012）----------------
+    def scene_for(self, device_id: str, scene: Optional[str] = None):
+        """返回某设备的已选场景包（ResolvedPack），未匹配则回退 default_scene。
+
+        解析优先级（从高到低）：
+        1. 显式 scene（会话参数，如 xiaozhi server 传 scene=pepper_cn_v1）；
+        2. device_model 匹配（能力注册表的 model → select_by_model）；
+        3. default_scene（建议 elder_cn_v1）。
+        结果按 key（scene 或 model）缓存，模型不变则不重算。
+        """
+        if device_id not in self._devices:
+            return None
+        model = self._devices[device_id][0]
+        key = scene or model
+        if key in self._scene_cache:
+            return self._scene_cache[key]
+        pack_id = scene or select_by_model(model) or self.default_scene
+        try:
+            rp = load_resolved(pack_id)
+        except Exception as e:  # 包损坏/缺失：降级到 default，不崩大脑
+            log.warning("场景包加载失败(%s)：%s，回退 %s", pack_id, e, self.default_scene)
+            rp = load_resolved(self.default_scene)
+        self._scene_cache[key] = rp
+        return rp
+
+    def get_scene(self, device_id: str, scene: Optional[str] = None,
+                  available_tools: Optional[Iterable[str]] = None) -> Optional[dict]:
+        """返回 MCP-CONTRACT §8 `self.suiyue.get_scene` 的契约体（dict）。
+
+        `available_tools`：本进程 MCP server 实际注册的工具名集合。传入后
+        场景包里的工具会被过滤（未注册的落到 `tools_pending`，不下发给 LLM），
+        见 `ResolvedPack.to_scene_payload`。省略则不过滤（仅供纯单测）。
+        """
+        rp = self.scene_for(device_id, scene)
+        return rp.to_scene_payload(available_tools) if rp else None

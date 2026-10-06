@@ -1,0 +1,45 @@
+# 场景包：pepper_cn_v1（Pepper 本体 · 居家老人陪伴）
+# 结构见 docs/adr/ADR-007-场景包软分离.md；本包是 Pepper 本体的场景层，
+# 域逻辑（老人陪伴）与 elder_cn_v1 同源，物理表达按 Pepper 20 DOF 调校。
+# 能力/动作原语以 brain/capabilities/pepper_v1.yaml 为准。
+
+scene_pack: pepper_cn_v1
+version: 0.1.0
+device_model: pepper_v1          # 关联能力注册表
+inherits: elder_cn_v1            # 域（老人陪伴）复用 elder_cn_v1 的意图/话术基调
+status: skeleton                 # 骨架：字段起草，待真机联调后填实
+
+target_user:
+  profile: 居家老人（60-85 岁）
+  language: zh-CN（普通话为主）
+  assumptions: 免唤醒 + 视觉在场门控 + 物理按键兜底（同 elder_cn_v1）
+
+persona:
+  name: 岁悦
+  address: 您
+  tone: 温和、不催促、短句优先（≤ 25 字/句）
+  speech_rate: 0.9
+  voice: warm_female_elder        # 4090 上 GPT-SoVITS 克隆女声（Pepper 内置 TTS 禁用）
+  repetition_policy: detect_and_extend
+
+# Pepper 物理表达：emotion -> 动作强度曲线（下发端侧前由编排器归一化）
+# 动作名对齐 pepper_v1.yaml emotion_mapping / action_primitives
+emotion_calibration:
+  happy:     {gain: 1.0, max: 0.9, motion: approach_and_wave}
+  soothing:  {gain: 0.8, max: 0.7, motion: posture_crouch}
+  concerned: {gain: 1.0, max: 0.8, motion: approach_and_wait}
+  curious:   {gain: 0.7, max: 0.6, motion: head_tilt}
+  excited:   {gain: 1.0, max: 0.9, motion: approach_and_wave}
+  neutral:   {gain: 0.0, max: 0.0, motion: none}
+
+# Pepper 特有：屏幕（10.1" 平板）在场问候；老人进入视野 -> 主动 approach
+companion_ui:
+  tablet_greeting: "您好，我是岁悦，今天感觉怎么样？"
+  on_face_detected: approach_and_wait   # 见 pepper/README §2 感知事件
+
+memory:
+  profile_fields_whitelist: ../profile_whitelist.yaml
+  confirm_before_save: [health_condition, family_relation]
+
+reminders:
+  default_style: 关怀而非指令

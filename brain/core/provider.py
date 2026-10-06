@@ -45,23 +45,39 @@ class BodyProvider:
         return None
 
 
+def is_mobile(model_cap: dict) -> bool:
+    """本体是否具备移动能力。
+
+    唯一判据是能力注册表的 `locomotion` 字段：**只要声明了移动方式即为可移动**，
+    不限定具体取值——`chassis`（大亮 AGV 底盘）/ `naoqi_wheel`（Pepper 三轮全向）/
+    未来的 `legged` / `tracked` 都自动生效，新增本体无需改本文件。
+
+    桌面本体（otto / reachy）无该字段 → 不可移动，移动原语按 MCP-CONTRACT §6 静默降级。
+
+    注意：不要用 `locomotion == "chassis"` 这类硬编码比较——那会让除大亮以外的
+    移动本体（Pepper）被误判为"无移动能力"，移动原语静默失效。
+    """
+    return bool(str(model_cap.get("locomotion") or "").strip())
+
+
 def _resolve_motion(model_cap: dict, intent: dict, *, static: bool) -> tuple[Optional[dict], bool, str]:
     """判断移动原语是否可执行。
 
     返回 (motion, degraded, note)。
-    - 本体有 `locomotion: chassis`（仅 daliang）→ 原语可解析为底盘命令；
-    - 其余本体（otto/reachy 无该字段）→ 移动原语安全降级忽略（MCP-CONTRACT §6）。
+    - 本体声明了 `locomotion`（大亮 chassis / Pepper naoqi_wheel）→ 原语可解析为移动命令；
+    - 桌面本体（otto/reachy 无该字段）→ 移动原语安全降级忽略（MCP-CONTRACT §6）。
     """
     primitive = (intent.get("action_primitive") or "").lower()
     if not primitive:
         return None, False, ""
-    if model_cap.get("locomotion") == "chassis":
-        note = "" if not static else "[static] 底盘意图已解析，未连接真实底盘（演示用）"
+    if is_mobile(model_cap):
+        note = "" if not static else "[static] 移动意图已解析，未连接真实本体（演示用）"
         return {"primitive": primitive, "params": intent.get("params", {})}, False, note
     return (
         None,
         True,
-        f"{model_cap.get('device_model')} 无移动能力，动作原语 '{primitive}' 已降级忽略（安全优先）",
+        f"{model_cap.get('device_model')} 无移动能力（locomotion 未声明），"
+        f"动作原语 '{primitive}' 已降级忽略（安全优先）",
     )
 
 

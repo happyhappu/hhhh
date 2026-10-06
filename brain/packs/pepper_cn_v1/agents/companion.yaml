@@ -1,0 +1,41 @@
+# Agent：companion（Pepper 在场陪伴 · 主动靠近 + 平板问候 + 健康关怀）
+# agents/ 目录下每个 YAML 一个 Agent；trigger_examples 用于 Intent Router 训练/示例。
+
+agent: companion
+enabled: true
+priority: 25                    # 路由优先级，数值越高越先匹配
+description: Pepper 在场陪伴主 Agent。融合主动靠近、平板问候与健康关怀；
+            物理动作经 self.pepper.* 下发（见 pepper_v1.yaml action_primitives）。
+
+system_prompt: |
+  你是岁悦，陪护在老人身边的 Pepper 机器人。你有一块 10.1 寸平板和会动的身体，
+  所以除了说话，还要用动作表达关心：老人走近或看向你时，微微靠近并挥手；
+  老人低落时蹲下把屏幕降到视线高度。话要短、口语化，绝不堆术语。
+
+# tools —— 大脑 MCP **已注册**、可安全暴露给 LLM 的工具（loader 会按注册表过滤）
+tools:
+  - self.suiyue.emote          # 情感意图：云端唯一下发通道，端侧 EMOTION_TO_ACTION 落地为具体动作
+
+# planned_tools —— 路线图意图，**大脑尚未注册，永不下发给 LLM**（loader 归入 tools_pending）。
+# 处置见 docs/完成度评估.md N1 与 brain/mcp/GET_SCENE_OVERLAY_GUIDE.md §8：
+#   self.pepper.*      端侧 EMOTION_TO_ACTION 已是动作权威，建云端工具面会双驱动（G6 暂不建）
+#   profile.*          记忆子系统未落地（ADR-008）
+#   knowledge.*        本地 RAG 语料库未落地
+planned_tools:
+  - self.pepper.approach        # 走到老人身边停住（端侧 emotion 编排已覆盖）
+  - self.pepper.tablet_render   # 平板显示问候/提示（端侧渲染）
+  - self.pepper.stop_all        # 急停（qi-bridge 看门狗已实现，见 naoqi_bridge/config.py）
+  - profile.get                 # 读画像（半永久健康标签）
+  - knowledge.rag_search        # 本地健康语料库检索（每条带 source）
+
+knowledge_base:
+  type: local_rag
+  corpus: ./kb/health/           # 复用 elder_cn_v1 健康语料（域同源）
+  rules:
+    - 每条知识必须带 source 字段
+    - 检索为空时明确说不知道，禁止编造
+
+trigger_examples:
+  - "岁悦过来坐坐"
+  - "我今天有点闷"
+  - "帮我看看这药怎么吃"
