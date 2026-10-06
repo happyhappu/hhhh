@@ -104,6 +104,6 @@ python2.7 bridge.py --qi-url tcp://192.168.31.<pepper-ip>:9559
 - [ ] `audio.py` 回调 `processRemote` 在 2.5.10.7 实测（通道顺序 `FRONT_MIC_CHANNEL`、buffer 布局）
 - [ ] `emote` 动画标签 / `approach` 前移距离按真机礼仪调参
 - [ ] 音频帧 base64 上行性能优化（真机改用裸字节流）
-- [ ] 与 `suiyue-pepper` 主网关（Py3）端到端联调（主网关代码见 `suiyue/pepper/` 规划）
+- [ ] 与 `suiyue-pepper` 主网关（Py3，已实现于 `suiyue/pepper/gateway.py`）端到端联调：心跳喂狗 5s、看门狗 15s 超时自动 `stop_all` 的实测行为
 
 > ⚠️ 本桥代码按 NAOqi 2.5 培训文档接口形状编写，**未经 NAOqi 2.5.10.7 真机验证**；真机若 proxy/方法名/事件名有出入，按模块局部调整即可（已用 `⚠️` 标注所有待确认点）。

@@ -4,7 +4,9 @@
 >
 > **本文档用途**：在「一台装 Py2.7 的联调机 + 通电同网的 Pepper」就位后，照此逐项验证 `naoqi_bridge/` 的可运行性。所有带 ⚠️ 的项为代码按 NAOqi 2.5 文档形状编写、**未经真机验证**，需真机实测确认，是本次联调的核心目标。
 >
-> **关联文件**：`pepper/naoqi_bridge/{bridge.py,audio.py,README.md}`、`brain/capabilities/pepper_v1.yaml`。
+> **关联文件**：`pepper/naoqi_bridge/{bridge.py,audio.py,README.md}`、`brain/capabilities/pepper_v1.yaml`、`docs/完成度评估.md`（G1–G10 缺口编号的权威定义）。
+>
+> **G 编号对照**：本 checklist 的 §8 / §9 分别对应 `完成度评估.md` 里的 **G3 / G4（跨组件契约）** 与 **G7–G10（真机专项验证）**；G1（注册 pepper-01）、G5（场景包加载器）、G6（`self.pepper.*` 工具面，暂不建议建）已完成或不涉及本 checklist。
 
 ---
 
@@ -126,11 +128,14 @@
 
 ---
 
-## §6 端到端 IPC（替代主网关的最小验证）
+## §6 端到端 IPC（先用最小客户端隔离协议层，再接主网关）
 
-- [ ] 用附录 A 的 Py3 测试客户端连 `127.0.0.1:9560`，循环发 `get_status` + `audio_start`，稳定打印回包与音频帧
-- **PASS 判据**：JSON 行收发稳定、无断连、音频帧连续
-- 注：正式 `suiyue-pepper` Py3 主网关尚未实现，本节用最小客户端替代，验证 IPC 协议本身
+- [ ] **第一步（协议层）**：用附录 A 的 Py3 测试客户端（或 `pepper/test_bridge_client.py`）连 `127.0.0.1:9560`，循环发 `get_status` + `audio_start`，稳定打印回包与音频帧
+      - **PASS 判据**：JSON 行收发稳定、无断连、音频帧连续
+- [ ] **第二步（主网关链路）**：起正式主网关 `python3.13 gateway.py`（云端 xiaozhi WS + 桥 IPC 打通），确认心跳喂狗生效
+      - 观察桥侧日志每 5s 收到一次 `ping`（`gateway_config.HEARTBEAT_INTERVAL_S=5.0`）
+- **PASS 判据**：主网关运行时**持续**收到 `ping`；`kill` 主网关进程后，桥侧应在 **15s**（`WATCHDOG_TIMEOUT_S=15.0`）内打印 `[watchdog] 主网关心跳超时 15.0s -> 自动 stop_all`，且 Pepper 停止运动
+- 注：主网关 `pepper/gateway.py`（Py3.13）与桥 `naoqi_bridge/bridge.py`（Py2.7）**均已实现**；本节先用最小客户端把协议层与硬件层解耦验证，再叠主网关，便于定位是哪一层出问题
 
 ---
 
@@ -145,11 +150,135 @@
       ```
 - [ ] **不实例化** `ALSpeechRecognition` / `ALTextToSpeech` / `ALDialog`（改云端 FunASR + GPT-SoVITS）
 - [ ] Pepper 自带**跌倒保护**（倾斜→kill motors）为硬件兜底，不依赖软件
-- [ ] ⚠️ **失联看门狗（主网关断连 > N 秒 → 自动 `stop_all`）本版未实现**（见 `bridge.py`/`README.md` TODO）；本次仅手动验证 `stop_all`；**生产前必须补齐跨进程心跳**
+- [ ] **失联看门狗（已实现，须实测）**：桥侧 `_start_watchdog` 线程监视主网关 `ping`，超过 `WATCHDOG_TIMEOUT_S=15.0` 未收到即自动 `stop_all`（ADR-011 §决策3）
+      - 联调实测：起主网关 → 确认桥日志每 5s 收一次 `ping` → 手动结束主网关进程 → 桥应在 15s 内打印 `[watchdog] 主网关心跳超时 15.0s -> 自动 stop_all`
+      - 手动 `stop_all` 仍须单独验证一次（不等心跳超时）
+- [ ] 心跳周期 5s < 超时阈值 15s（`gateway_config.HEARTBEAT_INTERVAL_S=5.0` / `naoqi_bridge/config.py:29`），留 3× 余量，容忍单次丢包
+
+---
+
+## §8 跨组件契约（G3 / G4，**云端 xiaozhi server 配合才能定**）
+
+> 这两项不在 Pepper 仓内，代码已写但**依赖云端确认**。§1–§7 全绿也不代表它们成立，需在打通云端 WS 后单独验证。
+
+### G3 — emotion 信号契约（网关读不到情绪标签）
+
+网关当前写法（`pepper/gateway.py:251`，⚠️ 未验证）：`msg.get("emotion") or msg.get("llm", {}).get("emotion")`——字段名依赖 server/LLM 版本。
+
+- [ ] **抓实际下发结构**：在 `gateway.py` 打印/落盘一条 LLM 应答消息的完整 JSON，核对情绪标签的真实路径
+      ```python
+      # 临时在 gateway 收到 llm 消息处加：
+      log.info("[G3] raw msg = %s", json.dumps(msg, ensure_ascii=False))
+      ```
+- [ ] **确认标签词表**：云端 LLM 实际输出的 emotion 取值是否命中 `pepper/gateway_config.py:47` `EMOTION_TO_ACTION` 的 **6 个键**（源码实测值）：
+      `happy` / `excited` / `soothing` / `curious` / `concerned` / `neutral`
+      → 未命中的标签会**静默回落到** `("posture", {"name":"Stand"})`（`gateway.py:351-352`），表现为"永远站着不动"，属静默失败
+- [ ] 若不一致，二选一：
+  - **[推荐]** 在 server 端约束 LLM 输出固定 emotion 标签（改 prompt / 配置，云端可控）
+  - 改 `gateway.py` 解析路径 + 扩 `EMOTION_TO_ACTION` 键（端侧改，云零改但每次都要跟版）
+- **PASS 判据**：云端返回一句带情绪的话，Pepper 做出**对应**的情绪动作（不只是"做了某个动作"）
+- [ ] **失败排查**：标签缺失/不命中 → 走默认 `posture Stand` 不报错，但属**静默失败**（务必看日志确认 `emotion=xxx -> action ...` 这行真的打了，见 `gateway.py:355`）
+
+### G4 — xiaozhi-server 设备绑定（大脑派发找不到目标）
+
+- [ ] **确认 server 侧设备身份**：网关连 server 时 `device_id` 留空、按连接分配（`gateway.py:216`）。需在 server 侧确认这条连接被识别为 **Pepper**，而非随机分配
+- [ ] **与大脑对齐**：大脑 `brain/mcp/config.yaml` 已注册 `pepper-01`；确认 server 侧的设备标识与之对应
+- [ ] **反向验证**：在 server 会话里触发一次 `self.suiyue.emote(device_id="pepper-01")`，确认：
+  1. MCP 工具返回成功（大脑认识这个设备）
+  2. **Pepper 本体有反应**（说明 server → WS → 网关 → 桥 的下行链路通）
+- **PASS 判据**：上面 2 条同时成立（返回成功 ≠ 本体会动，两条都要）
+- **失败排查**：
+  - 返回"未知设备" → 大脑侧未注册（已修，回归查 `config.yaml`）
+  - 返回成功但 Pepper 不动 → 下行链路断（server 未把 MCP 结果推给该连接 / WS 绑定错设备），属 server 侧问题
+
+---
+
+## §9 真机专项验证（G7–G10，**只能上真机才能拍板**）
+
+> 这四项在代码里都标了 ⚠️ 假设。§4/§5 是"顺带能验"，本节是**专项、逐条留证**。
+
+### G7 — NAOqi 动画标签真实性
+
+`pepper_cn_v1` 与 `EMOTION_TO_ACTION` 里写的动画名（`Wave` / `Crouch` / `head_tilt` 等）是**按文档假设**的，写错会静默失败。
+
+- [ ] **列出真机可用动画**（最权威做法，先列再选）：
+      ```bat
+      python2.7 -c "import qi; s=qi.Session(); s.connect('tcp://<PEPPER_IP>:9559'); p=s.service('ALAnimationPlayer'); print(p.getAnimationNames())"
+      ```
+- [ ] 挑一个确认存在的动画（如 `Wave`）跑 `emote`，看 Pepper 是否真的动
+- [ ] **校验 `processRemote` 回调签名与音频通道顺序**（代码假设：回调 `(value,)`、`value` 为 4 通道交织 buffer）——见 §4 的 ⚠️ 实测确认项 1/2
+- [ ] 把真机实际动画名**回填** `gateway_config.py:47` `EMOTION_TO_ACTION` 与 `packs/pepper_cn_v1/agents/companion.yaml`
+- **PASS 判据**：每个情绪标签都能让 Pepper 做出**可见且不同**的动作
+- **失败排查**：`play` 返回成功但不动 → 动画名不存在（静默失败）；动作卡住 → 前一动作未结束，需先 `stop_all`
+
+### G8 — TTS 下行真机扬声
+
+云端 GPT-SoVITS 语音 → 网关解码 WAV → `naoqi_bridge/audio.py:play_audio()` → `ALAudioPlayer.playToSpeaker`。
+
+- [ ] **绕过云端单测扬声**（先隔离云端变量）：构造一段 16k 单声道 **裸 PCM**（base64）→ 经 IPC 下发 `audio_play`
+      > ⚠️ 契约要点（源码锚定 `naoqi_bridge/bridge.py:138-144`）：`data_b64` 解码后是**裸 PCM 字节**，不是 WAV（WAV 头由 `audio.py:161 pcm_to_wav_bytes` 内部封装）；采样率字段名是 **`rate`**（不是 `sample_rate`）。
+
+      ```json
+      {"id":9,"action":"audio_play","params":{"rate":16000,"channels":1,"data_b64":"<裸PCM的base64>"}}
+      ```
+      ```bat
+      :: 生成测试裸 PCM 并 base64（Py3，16k 单声道 1s 正弦）
+      python -c "import math,struct,base64; pcm=b''.join(struct.pack('<h',int(8000*math.sin(i/20.))) for i in range(16000)); open('t.pcm_b64.txt','w').write(base64.b64encode(pcm).decode())"
+      ```
+- [ ] 确认回包 `{"id":9,"ok":true,"result":{"played":true}}`，且 Pepper **扬声器真的出声**（这一步最容易"返回 ok 但没声音"）
+- [ ] **听感/参数观察**：有无爆音、延迟是否可接受、采样率是否需重采样（云端 GPT-SoVITS 常见 22050/32000 Hz）
+- [ ] **打断行为**：TTS 播放中说话，确认上行音频能打断下行（网关已有此逻辑）
+- **PASS 判据**：扬声器出声且内容正确；打断生效
+- **失败排查**：无声 → 确认 `ALAudioDevice` 的扬声器通道号（`ALAudioPlayer.playToSpeaker` 的第二参）；采样率不匹配 → 在 `play_audio` 前加重采样
+
+### G9 — 真机 Win x86 网关机 SDK import（VC120 运行时）
+
+- [ ] **确认联调机是 Windows x86**（SDK 为 win32-vs2013，**ARM/树莓派不可用**）：
+      ```bat
+      python2.7 -c "import platform; print(platform.architecture(), platform.machine())"
+      :: 预期：('32bit', 'Windows') 'AMD64'/'i386' 的 32 位 Python
+      ```
+- [ ] `python2.7 -c "import qi, naoqi"` 通过（详见 §1，此处强调 **VC120** = `msvcr120/msvcp120.dll`）
+- [ ] `--auto-bridge` 能稳定拉起 Py2.7 桥子进程（跑 `start_pepper_debug.bat`，确认日志出现 `[bridge] connected`）
+- [ ] Py2.7 与 Py3.13 **同机共存**互不干扰（两个解释器 PATH 顺序、`--auto-bridge` 用的 `PEPPER_PY2_EXE` 指向正确）
+- **PASS 判据**：一条 `start_pepper_debug.bat` 从冷启动到"桥已连 broker + 网关已连云端"全绿
+- **失败排查**：`[WinError 126]` → 缺 VC120 运行库或 `PATH` 未含 `%SDK%\bin`；找不到 `naoqi` 模块 → 装成了 Py3 版 SDK
+
+### G10 — 巡游拓扑与禁区坐标（需 ALNavigation 建图）
+
+`packs/pepper_cn_v1/mobility.yaml` 的 `patrol.points` 与 `safety.yaml` 的 geofence 禁区**目前是骨架占位**，需真机建图后填真实值。
+
+- [ ] **建图**（NAOqi 无原生虚拟墙，用 ALNavigation 禁区 + 限速 0.4 m/s 近似）：
+      ```python
+      # 录制地图（遥控 Pepper 走遍巡游区域与禁区边界）
+      session.service("ALNavigation").startExploration()
+      # 走完后
+      session.service("ALNavigation").stopExploration()
+      session.service("ALNavigation").saveMap("pepper_patrol_map")   # 存到 Pepper 持久化目录
+      ```
+- [ ] **取巡游点位**：从地图上取若干拓扑节点（沙发边/餐桌边/床头），得到 `marker_id` 或坐标，填 `mobility.yaml: patrol.points`
+- [ ] **划禁区**：在地图上把楼梯口/门槛/桌角等划为禁区，填 `safety.yaml: geofence`
+- [ ] **实测巡游**：`navigate` 到各点位一次，确认可达（NAOqi 导航精度弱于大亮 SLAM，**限速 0.4 m/s**）
+- [ ] **禁区生效验证**：尝试 `navigate` 到禁区点，应被拒或绕行
+- **PASS 判据**：巡游点位全部可达；禁区点不可进入
+- **失败排查**：地图未保存 → `saveMap` 抛异常（需先 `ALNavigation` 已加载地图）；点位不可达 → 地图未覆盖该区域，补录
+
+---
+
+## §10 联调结论回填（收尾别忘）
+
+- [ ] 把 §8/§9 每项的**实测结论**回填：
+  - `pepper/naoqi_bridge/README.md` 的 TODO 清单（勾掉已验证项）
+  - `docs/完成度评估.md` §4 的 G3/G4/G7–G10 状态（已完成 → 更新）
+  - 真机实测到的动画名/采样率/坐标，回填 `gateway_config.py`、`packs/pepper_cn_v1/*.yaml`
+- [ ] 若某项结论与代码假设不符 → 改代码 + 在本 checklist 该项下写一行"实测：xxx（原假设 yyy 已修正）"
 
 ---
 
 ## 附录 A：最小 Py3 联调客户端（`test_client.py` 片段）
+
+> 仓库已有现成实现：**`pepper/test_bridge_client.py`**（不依赖 Py2 SDK，可直接用 Py3 跑，支持全部动作原语 + 音频帧校验）。下面的片段仅作协议最小示例，或在需要临时改脚本时用。
+> 桥侧独立调试用 `pepper/pepper_bridge.bat` 起桥，`pepper_gateway.bat` 起主网关。
 
 复制为任意 `.py` 文件，用 **Python 3** 运行（桥侧是 Py2.7，IPC 用 utf-8 文本 JSON 行，两端文本模式即可）：
 
@@ -195,3 +324,18 @@ s.close()
   3. 确认动作 proxy 命名（`emote` 动画标签、`approach` 距离等）
 - **唯一剩余前提**：一台装 **Python 2.7** 的联调机 + 通电同网的 Pepper
 - 联调结论回填：`pepper/naoqi_bridge/README.md` 的 TODO 清单（勾掉已验证项）
+
+---
+
+## 附录 C：一键启动脚本（替代手工两条命令）
+
+`pepper/` 下新增联调启动脚本，省去手工设环境变量：
+
+| 脚本 | 用途 |
+|---|---|
+| `start_pepper_debug.bat` | **一键启动**：设 SDK 环境 → 校验 Py2.7 import → 用 `--auto-bridge` 连主网关（自动拉起 Py2.7 桥）。窗口内 Ctrl+C 先 `stop_all` 再退出（桥子进程一起结束） |
+| `pepper_bridge.bat` | 只起 Py2.7 桥（调试/IPC 验证用，配合 `test_bridge_client.py`） |
+| `pepper_gateway.bat` | 只起 Py3 主网关（需桥已在 `:9560` 监听） |
+| `stop_pepper_debug.bat` | 兜底关窗（独立窗口模式用） |
+
+可用环境变量覆盖配置（详见脚本头注释）：`PEPPER_SDK_ENV` / `PEPPER_IP_ENV` / `SUIYUE_CLOUD_WS` / `PEPPER_PY2_EXE` / `PEPPER_PY3_EXE` / `PEPPER_DEVICE_ID` / `PEPPER_INSTALL_DEPS=1`。

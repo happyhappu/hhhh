@@ -348,11 +348,29 @@ class PepperGateway:
 
     # ---------------- emotion -> 动作 ----------------
     def _emote_from_emotion(self, emotion: str) -> None:
+        """云端 emotion 标签 -> 岁悦 emotion -> 动作原语。
+
+        G3 契约翻译：云端 server 用的是 `EMOJI_MAP` 的 21 个标签
+        （v0.9.7 `core/utils/textUtils.py:8-30`），与本仓
+        `EMOTION_TO_ACTION` 的 6 个键**几乎零交集**。必须先经
+        `cfg.to_suiyue_emotion()` 翻译，否则永远查表未命中、
+        静默回落到Stand（表现为"Pepper 永远站着不动"）。
+
+        未收录标签会打 WARNING —— 契约漂移要能被发现，而不是静默。
+        """
+        suiyue_emotion = cfg.to_suiyue_emotion(emotion)
+        if suiyue_emotion == cfg.UNKNOWN_EMOTION_FALLBACK and \
+                emotion != cfg.UNKNOWN_EMOTION_FALLBACK:
+            log.warning("云端 emotion 标签未收录于 SERVER_EMOTION_TO_SUYUE: %r "
+                        "-> 回落 %s（契约可能漂移，请核对 server 的 EMOJI_MAP）",
+                        emotion, cfg.UNKNOWN_EMOTION_FALLBACK)
+
         action, params = cfg.EMOTION_TO_ACTION.get(
-            emotion, ("posture", {"name": "Stand"}))
+            suiyue_emotion, ("posture", {"name": "Stand"}))
         try:
             self.bridge.send_action(action, params, timeout=5.0)
-            log.info("emotion=%s -> %s %s", emotion, action, params)
+            log.info("emotion=%s -> 岁悦 %s -> %s %s",
+                     emotion, suiyue_emotion, action, params)
         except Exception as exc:
             log.error("emote 失败: %s", exc)
 

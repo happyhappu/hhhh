@@ -1,7 +1,7 @@
 # Pepper 端侧网关（suiyue-pepper）
 
 > 第四本体接入方案。与大亮（ADR-009）同一范式：**一个 body-driver 网关 + 能力注册表条目（pepper_v1.yaml）+ 场景包（pepper_cn_v1/）**，云端零改动。
-> 上游形态参考 `docs/adr/ADR-002-三本体一脑.md`（已升级为四本体）、`ADR-011-全离线部署基线.md`。
+> 上游形态参考 `docs/adr/ADR-002-四本体一脑.md`、`ADR-011-全离线部署基线.md`。
 
 ## 1. Pepper 是什么（事实底座）
 
@@ -60,7 +60,7 @@
 
 > 启动顺序（Windows）：先起 Py2.7 桥（`python2.7 bridge.py --qi-url tcp://<pepper-ip>:9559`，监听 9560），再起 Py3 主网关连 9560。环境变量设置详见 §6「SDK 本地化运行环境」。
 
-## 3. 与现有三本体的差异点
+## 3. 四本体横向对比（Pepper vs 其余三者）
 
 | 维度 | Otto | Reachy Mini | 大亮 | **Pepper** |
 |---|---|---|---|---|
@@ -102,7 +102,11 @@ suiyue/pepper/
 │   ├── config.py / proxies.py / motion.py / navigation.py / tablet.py / vision.py
 │   └── README.md             # 运行环境 / IPC 协议 / 动作原语映射
 ├── test_bridge_client.py     # Py3 联调客户端（验证 IPC 协议与音频帧，无需 Pepper）
-ing│── packs/pepper_cn_v1/       # ★ 待建：场景包（镜像 daliang_cn_v1 的可选层）
+├── start_pepper_debug.bat    # ★ 真机联调一键启动（设 SDK 环境 + 自动拉起桥与主网关）
+├── pepper_bridge.bat         # 单独启动 Py2.7 naoqi_bridge（调试用）
+├── pepper_gateway.bat        # 单独启动 Py3 主网关（需桥已在 9560 监听）
+├── stop_pepper_debug.bat     # 关闭联调进程（兜底）
+└── packs/pepper_cn_v1/       # ★ 场景包骨架（persona / safety / agents / mobility / physical_caps）
 ```
 
 ### P0 · 阻塞启动（类比大亮 D6）
@@ -126,8 +130,9 @@ ing│── packs/pepper_cn_v1/       # ★ 待建：场景包（镜像 daliang
 ### P1 · 阶段 A 工程准备
 - [x] `naoqi_bridge/` 完整实现（bridge.py + audio.py + 各控制器 + 失联看门狗）；
 - [x] `suiyue-pepper` 主网关已落地（`gateway.py`：扮演 xiaozhi client 连云端 WS + 本地 TCP 连桥，桥接音频/TTS/emotion/动作原语）；
-- [ ] **真机联调**：先跑 `python2.7 naoqi_bridge/bridge.py` 连 Pepper broker，再起 `python3 gateway.py` 打通端到端音频对话（见 `naoqi_bridge/README.md` TODO 与 `真机联调checklist.md`）；
-- [ ] 云端加 `pepper_cn_v1` 场景包骨架 + `t_device_registry` 加 `pepper_v1` 条目；
+- [x] **真机联调一键启动脚本**：`start_pepper_debug.bat`（设 SDK 环境 + `--auto-bridge` 自动拉起 Py2.7 桥，Ctrl+C 优雅退出）；配套 `pepper_bridge.bat` / `pepper_gateway.bat` / `stop_pepper_debug.bat`；
+- [ ] **真机联调**：`start_pepper_debug.bat` 起服务后，连 Pepper broker 打通端到端音频对话（见 `naoqi_bridge/README.md` TODO 与 `真机联调checklist.md`）；
+- [x] 云端 `pepper_cn_v1` 场景包骨架已建（`persona/safety/agents/mobility/physical_caps`，待真机填实）；`pepper_v1.yaml` 能力注册表已存在（`brain/capabilities/pepper_v1.yaml`）；
 - [ ] 演示：老人说"岁悦过来坐坐" → Pepper approach + 挥手 + 平板问候语；与 Otto/Reachy/大亮同台。
 
 > Pepper 接入验证「端侧 OS 透明」原则（D2）再次成立：云端只认 xiaozhi 协议 + MCP，不知背后是 RTOS / Linux / Android / NAOqi。
