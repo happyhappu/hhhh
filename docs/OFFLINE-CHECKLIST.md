@@ -111,9 +111,19 @@ LLM:
   - [ ] WS 音频链路指向内网服务器（xiaozhi 协议，与 Otto/Reachy 同）
   - [ ] **禁用 Pepper 内置云端 ASR/TTS/Dialogue**，主链路走云端 xiaozhi + GPT-SoVITS
   - [ ] 关闭 NAOqi 自动更新检查与遥测（机箱外连 SoftBank，断网会反复重试超时）
+  - [ ] **关闭 `boot-config`（Getting Started Wizard）并持久化** ★实测新增（2026-10-12）
+    -现象：开机提示"连接服务器失败"；ssh 后 `stopBehavior boot-config` 即本地内网正常
+    - 一次性：`qicli call ALBehaviorManager.stopBehavior boot-config`
+    - **持久化**：`qicli call ALBehaviorManager.removeDefaultBehavior boot-config`
+      （default behavior 才会开机自启；只 stop 会在重启后复现）
+    - 验收：重启后 `isBehaviorRunning boot-config` → `False`，且开机无报错
+    - 详见 `docs/部署手册-4090与Pepper联调.md` §3.2.1
   - [ ] 确认本地中文语音包 / 中文字体已预装（离线兜底）
   - [ ] ALNavigation 拓扑地图已本地建好（离线不依赖云端地图）
-  - [x] **Pepper 开机无需联网激活**（用户已确认）→ air-gapped 前置条件满足，无 SoftBank 账号激活依赖；SDK 已本地化（pynaoqi 2.5.7.1，Py2.7）
+  - [x] **Pepper 开机无需联网激活**（用户已确认）→ **无 SoftBank 账号激活依赖**；
+    SDK 已本地化（pynaoqi 2.5.7.1，Py2.7）
+    ⚠️ **但"免激活"≠"免联网"**：开机仍会主动外连（Aldebaran 账号/更新检查）并报错，
+    **必须靠上面的 `boot-config` 持久化关闭**才能纯内网静默运行。
   - [ ] 失联看门狗：网关 ↔ 云端断连 > N 秒 → `self.pepper.stop_all`
 
 ---

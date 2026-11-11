@@ -4,9 +4,9 @@
 #
 # 关键定位（见 ADR-002 / ADR-011）：
 #   - 机载算力弱（x86 嵌入式级），只作**纯客户端**，不本地跑 LLM → 不增加 4090 显存预算；
-#   - 音频链路走云端 xiaozhi（ASR）+ GPT-SoVITS（TTS 流式下行），Pepper 仅作扬声器/麦克风 I/O；
-#   - **禁用** Pepper 内置 ALSpeechRecognition / ALTextToSpeech / ALDialogue（避免云端依赖与联网），
-#     中文陪伴音色由 4090 上的 GPT-SoVITS 克隆女声承担。
+#   - 麦克风音频走云端 xiaozhi/FunASR；回复文本由 Pepper 本机 ALTextToSpeech 朗读；
+#     网关丢弃云端二进制 TTS 音频；要完全禁用服务器端合成，服务端必须提供纯文本回复事件；
+#   - 禁用 Pepper 内置 ALSpeechRecognition / ALDialog，避免本机 ASR/规则对话与云端冲突。
 
 device_model: pepper_v1
 form: mobile_humanoid_naoqi
@@ -25,8 +25,16 @@ runtime:
   gateway_main: python3.13        # suiyue-pepper 主网关（MCP 侧）
   qi_bridge: python2.7           # 末端 qi-bridge 子进程，连 Pepper broker :9559
   ipc: local_tcp_jsonl           # 主网关 ↔ qi-bridge 本地 IPC：TCP 127.0.0.1:9560，JSON 行（utf-8 文本）
-  boot_activation_required: false # 用户已确认：Pepper 开机无需联网激活 → air-gapped 成立
-channels: [audio_in, audio_out, action, screen, mobility]
+  boot_activation_required: false # 用户已确认：Pepper 开机无需联网激活 → 无账号激活依赖
+  boot_network_access: true       # ⚠️ 但开机仍会主动外连（实测 2026-10-12）：报"连接服务器失败"
+  boot_config_must_disable: true  # 必做：关 boot-config 向导并持久化，否则每次开机都要 ssh 干预
+  # boot-config = Getting Started Wizard（ALBehaviorManager 管理的 default behavior）。
+  # 向导内含"连接 Aldebaran 社区账号 + 应用更新 + 系统升级"步骤，air-gapped 下必失败且阻塞部分功能。
+  # 一次性： qicli call ALBehaviorManager.stopBehavior boot-config
+  # 持久化： qicli call ALBehaviorManager.removeDefaultBehavior boot-config← 重启后不再复现
+  # 验收：   重启后 isBehaviorRunning boot-config == False，且开机无报错
+  # 详见 docs/部署手册-4090与Pepper联调.md §3.2.1
+  channels: [audio_in, audio_out, action, screen, mobility]
 
 naoqi:
   broker_url: tcp://192.168.31.<pepper_ip>:9559
@@ -43,13 +51,21 @@ naoqi:
     - ALPeoplePerception          # 人体感知（计数/距离）
     - ALTracker                   # 跟踪人体（可选）
     - ALTabletService             # 平板渲染 companion Web UI
+    - ALTextToSpeech              # 本机 TTS：网关发文本，Pepper 自己朗读，不下发云端合成音频
     - ALNavigation                # 拓扑地图导航【可选·降级】：培训文档导航章走 ROS(naoqi_driver)，纯 qi 路径未实证；先用 ALMotion.moveTo + 基础避障
   disabled_cloud_services:        # 离线必须关，见 ADR-011 §决策第 8 项
     - ALSpeechRecognition         # 禁用内置 ASR；改走云端 xiaozhi FunASR（培训文档语音章未用内置识别，印证）
-    - ALTextToSpeech              # 禁用内置 TTS；改走云端 GPT-SoVITS 流式（老年女声克隆）
     - ALDialog                    # 禁用 ALDialog(.top 规则引擎)；对话/意图改走云端 Intent Router
     - ALAutonomousLife            # 关键：禁用自主生命（置 disabled/nonAutonomous），否则 NAOqi 自作主张移动/交互，与云端显式控制冲突
     - 系统遥测 / 自动更新检查       # 关机箱外连 SoftBank，air-gapped 必断
+    - boot-config（Getting Started Wizard）# ⚠️ 实测 2026-10-12：开机外连报"连接服务器失败"并阻塞部分功能。
+
+  local_tts:
+    enabled: true
+    proxy: ALTextToSpeech
+    language: Chinese
+    audio_from_cloud: false
+    # 关法：removeDefaultBehavior boot-config（持久）→ 见接口段 boot_config_must_disable
 
 action_space:
   conservative_subset:            # 老人场景允许子集（其余仅展示模式）
@@ -94,4 +110,5 @@ safety:
   idle_pose: posture_stand
 
 # 编排层实现（规划）：suiyue/pepper/ 网关把 self.pepper.* 翻译为 NAOqi 代理调用；
-# 音频经 xiaozhi WS 上行、TTS 流式经扬声器下行（Pepper 内置 TTS 不启用）。
+# 麦克风音频经 xiaozhi WS 上行；回复文本由 Pepper 本机 ALTextToSpeech 朗读，
+# 网关忽略云端 TTS 二进制音频。服务器是否仍生成 TTS 音频取决于服务端实现/配置。

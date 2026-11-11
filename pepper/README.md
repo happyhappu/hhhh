@@ -76,9 +76,9 @@ Pepper 介于 Reachy（桌面）与大亮（全功能移动服务）之间：**�
 
 ## 4. 离线要点（air-gapped，见 ADR-011）
 
-1. **禁用 Pepper 内置云端服务**：`ALSpeechRecognition` / `ALTextToSpeech` / `ALDialogue` 一律不用，改云端 xiaozhi + GPT-SoVITS；
+1. ASR/LLM 走 xiaozhi；回复文本由 Pepper 本机 `ALTextToSpeech` 朗读，网关不播放云端 TTS 音频。若服务端只在 `tts.sentence_start` 事件提供文本，服务端仍可能先合成音频；要彻底关闭服务端 TTS，需另行修改 4090 上的 xiaozhi-server。禁用 `ALSpeechRecognition` / `ALDialog`，避免本机 ASR/规则对话与云端冲突；
 2. **关闭 NAOqi 遥测与自动更新检查**（机箱外连 SoftBank），否则断网后反复重试超时；
-3. **预装本地中文语音包**（若 Pepper 镜像自带 pico/nuance 中文 voice 则留作兜底，但主链路仍用 GPT-SoVITS）；
+3. **确认 Pepper 的 `ALTextToSpeech` 中文语音包可用**；语言设为 `Chinese`，实际可用 voice/语速需真机验证；
 4. **ALNavigation 地图本地建好**，离线不依赖任何云端地图服务；
 5. Pepper 本身不消耗 4090 显存；断网验收同 OFFLINE-CHECKLIST.md 阶段 4。
 

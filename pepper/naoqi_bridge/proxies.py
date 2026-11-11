@@ -21,6 +21,7 @@ REQUIRED = [
     "ALAudioDevice",     # 麦克风采集（音频上云入口）
 ]
 OPTIONAL = [
+    "ALTextToSpeech",    # 本机文本朗读（local TTS）
     "ALBasicAwareness",  # 注视/在场（approach 时面向说话人）
     "ALNavigation",      # 拓扑地图导航【可选·降级】
     "ALTracker",         # 跟踪人体（approach 增强）

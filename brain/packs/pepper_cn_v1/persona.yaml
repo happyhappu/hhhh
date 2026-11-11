@@ -19,7 +19,7 @@ persona:
   address: 您
   tone: 温和、不催促、短句优先（≤ 25 字/句）
   speech_rate: 0.9
-  voice: warm_female_elder        # 4090 上 GPT-SoVITS 克隆女声（Pepper 内置 TTS 禁用）
+  voice: warm_female_elder        # 目标音色描述；当前 Pepper 本机 TTS 的 voice 需在机器人端实测配置
   repetition_policy: detect_and_extend
 
 # Pepper 物理表达：emotion -> 动作强度曲线（下发端侧前由编排器归一化）

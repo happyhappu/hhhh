@@ -16,6 +16,18 @@
 - [ ] 联调 PC 与 Pepper **同一局域网**（建议直连或同 VLAN，避免跨网段 NAT/隔离）；记录 Pepper IP（机器人设置→网络，或路由器 DHCP 列表）
 - [ ] 确认 Pepper 固件为 **NAOqi 2.5.10.7**（设置→关于本机）
 - [ ] 已知 **开机免联网激活**（已确认），无需 SoftBank 账号，纯内网可长期运行
+- [ ] 🔴 **关闭 `boot-config`（Getting Started Wizard）并持久化** —— 实测必做（2026-10-12）
+      >现象：开机提示"连接服务器失败"；ssh 后 `stopBehavior boot-config` 即本地内网正常。
+      > 关机向导（ALBehaviorManager 的 default behavior）会外连 Aldebaran 账号 + 检查更新，
+      > air-gapped 下必失败，**且部分功能被阻塞**。
+      ```bash
+      qicli call ALBehaviorManager.isBehaviorRunning boot-config      # 确认在跑
+      qicli call ALBehaviorManager.stopBehavior boot-config           # 立即关
+      qicli call ALBehaviorManager.removeDefaultBehavior boot-config   # 持久化（否则重启复现）
+      ```
+- [ ] **PASS**：`removeDefaultBehavior` 后**重启**，开机无报错，
+      且 `isBehaviorRunning boot-config` → `False`
+- [ ] 关`ALAutonomousLife`（见 §7），否则会抢 `EMOTION_TO_ACTION` 的控制权
 
 ---
 
@@ -213,7 +225,8 @@
 
 ### G8 — TTS 下行真机扬声
 
-云端 GPT-SoVITS 语音 → 网关解码 WAV → `naoqi_bridge/audio.py:play_audio()` → `ALAudioPlayer.playToSpeaker`。
+当前默认语音路径：xiaozhi 下发回复文本 → 网关 `say_text` IPC → Pepper `ALTextToSpeech.say()`。
+网关忽略云端 TTS 二进制音频；只有将 `PEPPER_LOCAL_TTS=0` 才走下方旧音频播放路径。
 
 - [ ] **绕过云端单测扬声**（先隔离云端变量）：构造一段 16k 单声道 **裸 PCM**（base64）→ 经 IPC 下发 `audio_play`
       > ⚠️ 契约要点（源码锚定 `naoqi_bridge/bridge.py:138-144`）：`data_b64` 解码后是**裸 PCM 字节**，不是 WAV（WAV 头由 `audio.py:161 pcm_to_wav_bytes` 内部封装）；采样率字段名是 **`rate`**（不是 `sample_rate`）。

@@ -42,11 +42,25 @@ except ImportError:
     _HAVE_WS = False
     log.warning("websocket-client 未安装；运行前请 `pip install websocket-client`")
 
+_OPUS_DLL_DIR_HANDLE = None
+if os.name == "nt":
+    _workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    _opus_bin = os.environ.get(
+        "PEPPER_OPUS_BIN",
+        os.path.join(_workspace_root, ".runtime", "libopus", "mingw32", "bin"),
+    )
+    if os.path.isdir(_opus_bin):
+        os.environ["PATH"] = _opus_bin + os.pathsep + os.environ.get("PATH", "")
+        if hasattr(os, "add_dll_directory"):
+            _OPUS_DLL_DIR_HANDLE = os.add_dll_directory(_opus_bin)
+
 try:
     import opuslib
     _HAVE_OPUS = True
-except ImportError:
+    _OPUS_IMPORT_ERROR = None
+except Exception as exc:
     _HAVE_OPUS = False
+    _OPUS_IMPORT_ERROR = exc
 
 
 # --------------------------------------------------------------------------
@@ -69,8 +83,17 @@ class BridgeClient:
         self._recv_thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
 
-    def connect(self) -> None:
-        self.sock = socket.create_connection((self.host, self.port), timeout=10)
+    def connect(self, retry_timeout: float = 0.0) -> None:
+        deadline = time.monotonic() + retry_timeout
+        while True:
+            try:
+                self.sock = socket.create_connection((self.host, self.port), timeout=2)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.25)
+        self.sock.settimeout(None)
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._recv_thread.start()
         log.info("已连 naoqi_bridge IPC %s:%d", self.host, self.port)
@@ -168,43 +191,97 @@ class PepperGateway:
         self._listen_lock = threading.Lock()
         self._silence_since: Optional[float] = None
         self._vad_lock = threading.Lock()
-        self._tts_playing = threading.Event()   # TTS 播放时暂停上行（打断）
+        self._tts_playing = threading.Event()   # TTS 播放时暂停麦克风上行
+        self._audio_gate_lock = threading.RLock()
+        self._turn_lock = threading.RLock()
+        self._turn_processing = False
+        self._turn_number = 0
+        self._microphone_managed = False
+        self._microphone_paused = threading.Event()
+        self._microphone_pause_error = None
+        self._last_human_voice = 0.0
+        self._resume_mic_at = 0.0
         self._tts_state = "idle"
         self._tts_chunks: list = []
-        self._tts_lock = threading.Lock()
+        self._tts_lock = threading.RLock()
         self._cloud_thread: Optional[threading.Thread] = None
         self._heartbeat_thread: Optional[threading.Thread] = None
         self._auto_bridge = args.auto_bridge
         self._py2_exe = args.py2_exe
         self._bridge_proc: Optional[subprocess.Popen] = None
+        self._audio_only = args.audio_only
+        self._allow_gestures = bool(getattr(args, "allow_gestures", False))
+        self._gesture_lock = threading.Lock()
+        self._gesture_running = False
+        self._last_gesture_at = 0.0
+        self._gesture_done = threading.Event()
+        self._gesture_done.set()
+        self._gesture_result = None
+        self._test_text = getattr(args, "test_text", None)
+        self._test_done = threading.Event()
+        self._test_ok = False
+        self._cloud_ready = threading.Event()
+        self._pcm_pending = bytearray()
+        self._play_queue = queue.Queue()
+        self._pending_playbacks = 0
+        self._speech_queue = queue.Queue()
+        self._speech_lock = threading.Lock()
+        self._spoken_texts = set()
+        self._spoken_turn_ids = {}
+        self._pending_speech_count = 0
+        threading.Thread(target=self._speech_loop, daemon=True).start()
+        if not cfg.LOCAL_TTS:
+            threading.Thread(target=self._playback_loop, daemon=True).start()
 
     # ---------------- 启动 ----------------
     def run(self) -> None:
-        if self._auto_bridge:
-            self._start_bridge_subprocess()
-        self.bridge.connect()
-        # 心跳线（喂 naoqi_bridge 看门狗）
-        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
-        self._heartbeat_thread.start()
-        self._connect_cloud()
-        log.info("主网关运行中（Ctrl+C 退出）")
         try:
-            while not self._stop.is_set():
-                time.sleep(0.5)
+            if self._auto_bridge:
+                self._start_bridge_subprocess()
+            self.bridge.connect(retry_timeout=20.0 if self._auto_bridge else 0.0)
+            self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
+            self._heartbeat_thread.start()
+            self._connect_cloud()
+            if not self._cloud_ready.wait(25):
+                raise RuntimeError("Cloud hello timed out")
+            if self._test_text:
+                self.ws.send(json.dumps({"type": "listen", "state": "detect", "text": self._test_text}))
+                if not self._test_done.wait(90) or not self._test_ok:
+                    raise RuntimeError("Text-to-Pepper playback test did not complete")
+                if self._allow_gestures:
+                    self._gesture_done.wait(30)
+                    if self._gesture_result:
+                        log.info("EXPRESSION_GESTURE_TEST_PASS")
+                log.info("VOICE_DOWNLINK_TEST_PASS")
+                return
+            result = self.bridge.send_action("audio_start", timeout=20)
+            if not result.get("ok"):
+                raise RuntimeError("Microphone start failed: %s" % result)
+            self._microphone_managed = True
+            log.info("Microphone started; audio_only=%s", self._audio_only)
+            while not self._stop.wait(0.5):
+                stop_file = os.environ.get("PEPPER_STOP_FILE")
+                if stop_file and os.path.isfile(stop_file):
+                    break
         finally:
             self.shutdown()
 
-    # ---------------- 云端 xiaozhi WS ----------------
     def _connect_cloud(self) -> None:
         if not _HAVE_WS:
             raise RuntimeError("websocket-client 未安装，无法连云端")
         if cfg.AUDIO_FORMAT == "opus" and not _HAVE_OPUS:
-            log.warning("AUDIO_FORMAT=opus 但 opuslib 未安装；若云端支持 raw PCM 请将 "
-                        "PEPPER_AUDIO_FORMAT=raw，否则握手后音频会失败")
-        self.ws = websocket.create_connection(self.cloud_ws, enable_multithread=True)
+            raise RuntimeError("AUDIO_FORMAT=opus 但 Opus 运行库不可用: %s" %
+                               _OPUS_IMPORT_ERROR)
+        self.ws = websocket.create_connection(
+            self.cloud_ws, enable_multithread=True, timeout=20,
+            header={"Device-Id": self.device_id, "Client-Id": "pepper-gateway"},
+            http_no_proxy=["192.168.0.87", "127.0.0.1", "localhost"],
+        )
+        self.ws.settimeout(None)
         hello = {
             "type": "hello",
-            "version": cfg.XIAOZHI_PROTOCOL_VERSION,
+            "version": 1,
+            "features": {"emoji": True, "half_duplex": True},
             "transport": "websocket",
             "audio_params": {
                 # ⚠️ format 字段：xiaozhi-server 通常要求 opus；若 server 支持 raw 可改
@@ -227,7 +304,27 @@ class PepperGateway:
             except Exception as exc:
                 if not self._stop.is_set():
                     log.error("云端 WS 断开: %s", exc)
-                break
+                self._cloud_ready.clear()
+                self._listen_active = False
+                resume_after_disconnect = False
+                with self._tts_lock:
+                    self._tts_chunks = []
+                    self._tts_state = "idle"
+                    with self._speech_lock:
+                        if not self._pending_playbacks and not self._pending_speech_count:
+                            if self._turn_processing:
+                                resume_after_disconnect = True
+                            else:
+                                self._tts_playing.clear()
+                if resume_after_disconnect:
+                    threading.Thread(target=self._finish_processing, daemon=True).start()
+                while not self._stop.wait(3):
+                    try:
+                        self._connect_cloud()
+                        return
+                    except Exception as reconnect_error:
+                        log.warning("Cloud reconnect failed: %s", reconnect_error)
+                return
             if opcode == websocket.ABNF.OPCODE_TEXT:
                 self._on_cloud_text(data.decode("utf-8", "replace"))
             elif opcode == websocket.ABNF.OPCODE_BINARY:
@@ -241,19 +338,37 @@ class PepperGateway:
         mtype = msg.get("type")
         if mtype == "hello":
             self._session_id = msg.get("session_id")
+            self._cloud_ready.set()
             ap = msg.get("audio_params") or {}
             log.info("云端 hello 回包 session_id=%s audio_params=%s",
                      self._session_id, ap)
         elif mtype == "stt":
             log.info("[STT] %s", msg.get("text", ""))
+        elif mtype == "listen" and msg.get("state") == "processing":
+            self._begin_processing()
+        elif mtype == "listen" and msg.get("state") == "ready":
+            # ASR produced no usable text; there will be no LLM reply.
+            threading.Thread(target=self._finish_processing, daemon=True).start()
         elif mtype == "llm":
             # ⚠️ emotion 字段名依 server/LLM 版本；兼容直接 emotion 或嵌套 llm.emotion
             emotion = msg.get("emotion") or (msg.get("llm") or {}).get("emotion")
-            content = msg.get("content") or msg.get("text") or ""
-            if emotion:
-                self._emote_from_emotion(emotion)
+            raw_text = msg.get("text") or ""
+            emoji = (raw_text if raw_text in cfg.SERVER_EMOTION_TO_EMOJI.values()
+                     else cfg.SERVER_EMOTION_TO_EMOJI.get(emotion, ""))
+            content = msg.get("content") or (
+                "" if emoji == raw_text or raw_text in cfg.SERVER_EMOTION_TO_SUYUE else raw_text
+            )
             if content:
-                log.info("[LLM] %s", content)
+                # start-voice.cmd's console is the existing conversation popup.
+                # `text` is the emoji; only `content` is sent to local TTS.
+                log.info("[LLM] %s %s", emoji, content)
+                if cfg.LOCAL_TTS:
+                    self._enqueue_speech(content, turn_id=msg.get("turn_id"),
+                                         emotion=emotion)
+            elif emoji:
+                log.info("[表情] %s (%s)", emoji, emotion or "unknown")
+            if emotion and not cfg.LOCAL_TTS and self._allow_gestures:
+                self._emote_from_emotion(emotion)
         elif mtype == "tts":
             self._on_tts_state(msg)
         else:
@@ -265,79 +380,233 @@ class PepperGateway:
             if state == "start":
                 self._tts_state = "streaming"
                 self._tts_chunks = []
-                self._tts_playing.set()       # 打断：暂停上行麦克风
+                if not cfg.LOCAL_TTS:
+                    self._tts_playing.set()
             elif state == "sentence_start":
-                # ⚠️ 可选：把 text 回显到 Pepper 平板（需主网关托管字幕页，TODO）
-                log.info("[TTS] %s", msg.get("text", ""))
+                text = msg.get("text") or msg.get("content") or ""
+                log.info("[TTS text] %s", text)
+                if cfg.LOCAL_TTS:
+                    self._enqueue_speech(text)
             elif state in ("stop", "finish"):
+                if cfg.LOCAL_TTS:
+                    self._tts_state = "idle"
+                    with self._speech_lock:
+                        self._spoken_texts.clear()
+                    return
                 if self._tts_state == "streaming":
                     self._flush_tts()
                 self._tts_state = "idle"
-                self._tts_playing.clear()
+                if not self._pending_playbacks:
+                    self._tts_playing.clear()
 
     def _flush_tts(self) -> None:
         with self._tts_lock:
-            chunks = self._tts_chunks
-            self._tts_chunks = []
-        if not chunks:
-            return
-        raw = b"".join(chunks)
-        pcm = self._decode_audio(raw)
-        if pcm is None:
-            return
-        try:
-            self.bridge.send_action("audio_play", {
-                "data_b64": base64.b64encode(pcm).decode("ascii"),
-                "rate": cfg.AUDIO_RATE,
-                "channels": cfg.AUDIO_CHANNELS,
-            }, timeout=5.0)
-            log.info("[TTS] 已下发 %d 字节音频到 Pepper 扬声器", len(pcm))
-        except Exception as exc:
-            log.error("TTS 下发失败: %s", exc)
+            chunks, self._tts_chunks = self._tts_chunks, []
+            if chunks:
+                self._pending_playbacks += 1
+                self._play_queue.put(chunks)
+
+    def _playback_loop(self) -> None:
+        while True:
+            chunks = self._play_queue.get()
+            if chunks is None:
+                return
+            try:
+                decoded = [self._decode_audio(packet) for packet in chunks]
+                if any(part is None for part in decoded):
+                    raise RuntimeError("One or more Opus packets failed to decode")
+                pcm = b"".join(decoded)
+                result = self.bridge.send_action("audio_play", {
+                    "data_b64": base64.b64encode(pcm).decode("ascii"),
+                    "rate": cfg.AUDIO_RATE, "channels": cfg.AUDIO_CHANNELS,
+                }, timeout=max(30.0, len(pcm) / 32000.0 + 15))
+                if not result.get("ok") or not result.get("result", {}).get("played"):
+                    raise RuntimeError("Pepper rejected playback: %s" % result)
+                log.info("[TTS] Playback confirmed: %s", result["result"])
+                self._test_ok = True
+            except Exception:
+                log.exception("TTS playback failed")
+            finally:
+                self._test_done.set()
+                with self._tts_lock:
+                    self._pending_playbacks -= 1
+                    if self._pending_playbacks == 0 and self._tts_state == "idle":
+                        self._tts_playing.clear()
+                self._listen_active = False
+                self._pcm_pending.clear()
 
     def _on_cloud_binary(self, data: bytes) -> None:
+        if cfg.LOCAL_TTS:
+            return
         with self._tts_lock:
             if self._tts_state == "streaming":
                 self._tts_chunks.append(data)
 
+    def _enqueue_speech(self, text: str, turn_id=None, emotion=None) -> bool:
+        text = " ".join(str(text).split()).strip()
+        # Emoji-only legacy events have no turn_id. Complete text-mode
+        # messages do, so legitimate one-character replies are accepted.
+        if not text or (not turn_id and len(text) <= 1):
+            return False
+        with self._speech_lock:
+            if turn_id:
+                turn_id = str(turn_id)
+                if turn_id in self._spoken_turn_ids:
+                    return False
+                self._spoken_turn_ids[turn_id] = None
+                if len(self._spoken_turn_ids) > 256:
+                    self._spoken_turn_ids.pop(next(iter(self._spoken_turn_ids)))
+            else:
+                # Keep the original tts.stop-based deduplication for old servers.
+                if text in self._spoken_texts:
+                    return False
+                self._spoken_texts.add(text)
+            self._pending_speech_count += 1
+            self._speech_queue.put((text, emotion))
+        return True
+
+    def _begin_processing(self) -> None:
+        """Fence audio immediately, then unsubscribe Pepper's microphone."""
+        with self._turn_lock:
+            if self._turn_processing:
+                return
+            self._turn_processing = True
+            self._turn_number += 1
+            turn = self._turn_number
+            self._microphone_pause_error = None
+            self._microphone_paused.clear()
+            with self._audio_gate_lock:
+                self._tts_playing.set()
+                self._pcm_pending.clear()
+
+            def pause():
+                try:
+                    if self._microphone_managed:
+                        result = self.bridge.send_action("audio_stop", timeout=20)
+                        if not result.get("ok"):
+                            raise RuntimeError("Microphone stop rejected: %s" % result)
+                        log.info("[聆听] 已暂停麦克风，等待识别和回答")
+                except Exception as exc:
+                    self._microphone_pause_error = exc
+                    log.error("停止麦克风失败，本轮不会朗读: %s", exc)
+                finally:
+                    self._microphone_paused.set()
+
+            def timeout():
+                if self._stop.wait(cfg.TURN_TIMEOUT_S):
+                    return
+                with self._speech_lock:
+                    pending = self._pending_speech_count
+                with self._turn_lock:
+                    expired = self._turn_processing and self._turn_number == turn
+                if expired and not pending:
+                    log.warning("等待回答超时，恢复聆听")
+                    self._finish_processing()
+
+            threading.Thread(target=pause, daemon=True).start()
+            threading.Thread(target=timeout, daemon=True).start()
+
+    def _finish_processing(self) -> None:
+        """After speech, resubscribe; keep all in-flight audio gated meanwhile."""
+        with self._turn_lock:
+            if not self._turn_processing:
+                return
+            if not self._microphone_paused.wait(25):
+                log.error("麦克风停止操作超时，保持暂停状态")
+                return
+            if self._stop.wait(cfg.MIC_RESUME_DELAY_S):
+                return
+            try:
+                if self._microphone_managed:
+                    result = self.bridge.send_action("audio_start", timeout=20)
+                    if not result.get("ok"):
+                        raise RuntimeError("Microphone restart rejected: %s" % result)
+                with self._audio_gate_lock:
+                    self._pcm_pending.clear()
+                    self._listen_active = False
+                    self._resume_mic_at = 0.0
+                    self._last_human_voice = 0.0
+                    self._tts_playing.clear()
+                self._turn_processing = False
+                if self._microphone_managed:
+                    log.info("[聆听] 已恢复麦克风，可以继续说话")
+            except Exception as exc:
+                # Do not claim the microphone reopened when NAOqi rejected it.
+                log.error("恢复麦克风失败，请重启网关: %s", exc)
+
+    def _speech_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                item = self._speech_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            if item is None:
+                return
+            text, emotion = item
+            try:
+                # Processing notification normally arrived before ASR. This
+                # also protects replies from older servers and text-only tests.
+                self._begin_processing()
+                if not self._microphone_paused.wait(25):
+                    raise RuntimeError("Microphone did not stop in time")
+                if self._microphone_pause_error:
+                    raise RuntimeError("Microphone could not be stopped")
+                if emotion and self._allow_gestures:
+                    self._emote_from_emotion(emotion)
+                result = self.bridge.send_action(
+                    "say_text", {"text": text},
+                    timeout=max(20.0, len(text) * 1.5 + 5.0),
+                )
+                if not result.get("ok"):
+                    log.error("本机 TTS 失败: %s", result)
+                else:
+                    log.info("[Local TTS] %s", text)
+                    self._test_ok = True
+            except Exception:
+                log.exception("本机 TTS 下发失败")
+            finally:
+                self._test_done.set()
+                with self._speech_lock:
+                    self._pending_speech_count = max(0, self._pending_speech_count - 1)
+                    finished = not self._pending_speech_count
+                if finished:
+                    self._finish_processing()
+
     # ---------------- 上行：Pepper 麦克风 -> 云端 ----------------
     def _on_bridge_audio(self, pcm: bytes, rate: int, channels: int) -> None:
-        if self._tts_playing.is_set():
-            return   # 打断：TTS 播放时不上行麦克风
-        if not self._ensure_listen(pcm):
-            return
-        frame = self._encode_audio(pcm, rate, channels)
-        if frame is None or self.ws is None:
-            return
-        try:
-            self.ws.send_binary(frame)
-        except Exception as exc:
-            log.error("上行音频失败: %s", exc)
+        with self._audio_gate_lock:
+            now = time.monotonic()
+            if (self._tts_playing.is_set() or now < self._resume_mic_at
+                    or not self._cloud_ready.is_set()):
+                self._pcm_pending.clear()
+                return
+            if rate != cfg.AUDIO_RATE or channels != cfg.AUDIO_CHANNELS:
+                log.error("Unexpected microphone format: %s/%s", rate, channels)
+                return
+            if _rms_int16(pcm) >= cfg.VAD_ENERGY_THRESHOLD:
+                self._last_human_voice = now
+            self._pcm_pending.extend(pcm)
+            size = cfg.OPUS_FRAME_SAMPLES * channels * 2
+            while len(self._pcm_pending) >= size:
+                pcm_frame = bytes(self._pcm_pending[:size])
+                del self._pcm_pending[:size]
+                if not self._ensure_listen(pcm_frame):
+                    continue
+                frame = self._encode_audio(pcm_frame, rate, channels)
+                if frame is not None and self.ws is not None:
+                    self.ws.send_binary(frame)
 
     def _ensure_listen(self, pcm: bytes) -> bool:
-        """VAD：有声音 -> listen start 并上行；静音超窗 -> listen stop 并停止上行。"""
-        rms = _rms_int16(pcm)
-        now = time.time()
-        with self._vad_lock:
-            if rms > cfg.VAD_ENERGY_THRESHOLD:
-                self._silence_since = None
-                if not self._listen_active:
-                    self._send_listen("start")
-                    self._listen_active = True
-                return True
-            else:
-                if self._listen_active:
-                    if self._silence_since is None:
-                        self._silence_since = now
-                    elif now - self._silence_since > cfg.VAD_SILENCE_MS / 1000.0:
-                        self._send_listen("stop")
-                        self._listen_active = False
-                return False
+        """Let the brain's Silero VAD detect utterance boundaries, including silence."""
+        if not self._listen_active:
+            self._send_listen("start")
+            self._listen_active = True
+        return True
 
     def _send_listen(self, state: str) -> None:
         if self.ws is None:
             return
-        msg = {"type": "listen", "state": state}
+        msg = {"type": "listen", "state": state, "mode": "auto"}
         if self._session_id:
             msg["session_id"] = self._session_id
         try:
@@ -348,31 +617,39 @@ class PepperGateway:
 
     # ---------------- emotion -> 动作 ----------------
     def _emote_from_emotion(self, emotion: str) -> None:
-        """云端 emotion 标签 -> 岁悦 emotion -> 动作原语。
+        """Schedule one whitelisted animation without blocking speech or IPC."""
+        if not self._allow_gestures:
+            return
+        animation = cfg.SERVER_EMOTION_TO_GESTURE.get(emotion)
+        if not animation:
+            return
+        with self._gesture_lock:
+            now = time.monotonic()
+            if self._gesture_running or now - self._last_gesture_at < cfg.GESTURE_COOLDOWN_S:
+                log.info("表情动作忙或冷却中，跳过 %s", emotion)
+                return
+            self._gesture_running = True
+            self._last_gesture_at = now
+            self._gesture_result = None
+            self._gesture_done.clear()
 
-        G3 契约翻译：云端 server 用的是 `EMOJI_MAP` 的 21 个标签
-        （v0.9.7 `core/utils/textUtils.py:8-30`），与本仓
-        `EMOTION_TO_ACTION` 的 6 个键**几乎零交集**。必须先经
-        `cfg.to_suiyue_emotion()` 翻译，否则永远查表未命中、
-        静默回落到Stand（表现为"Pepper 永远站着不动"）。
+        def run_gesture():
+            try:
+                result = self.bridge.send_action(
+                    "safe_gesture", {"animation": animation}, timeout=30.0)
+                if not result.get("ok") or not result.get("result", {}).get("played"):
+                    log.warning("表情动作未执行: %s", result)
+                else:
+                    self._gesture_result = True
+                    log.info("emotion=%s -> 动作=%s result=%s", emotion, animation, result)
+            except Exception as exc:
+                log.warning("表情动作失败: %s", exc)
+            finally:
+                with self._gesture_lock:
+                    self._gesture_running = False
+                    self._gesture_done.set()
 
-        未收录标签会打 WARNING —— 契约漂移要能被发现，而不是静默。
-        """
-        suiyue_emotion = cfg.to_suiyue_emotion(emotion)
-        if suiyue_emotion == cfg.UNKNOWN_EMOTION_FALLBACK and \
-                emotion != cfg.UNKNOWN_EMOTION_FALLBACK:
-            log.warning("云端 emotion 标签未收录于 SERVER_EMOTION_TO_SUYUE: %r "
-                        "-> 回落 %s（契约可能漂移，请核对 server 的 EMOJI_MAP）",
-                        emotion, cfg.UNKNOWN_EMOTION_FALLBACK)
-
-        action, params = cfg.EMOTION_TO_ACTION.get(
-            suiyue_emotion, ("posture", {"name": "Stand"}))
-        try:
-            self.bridge.send_action(action, params, timeout=5.0)
-            log.info("emotion=%s -> 岁悦 %s -> %s %s",
-                     emotion, suiyue_emotion, action, params)
-        except Exception as exc:
-            log.error("emote 失败: %s", exc)
+        threading.Thread(target=run_gesture, daemon=True).start()
 
     # ---------------- 感知事件 ----------------
     def _on_bridge_event(self, name: str, data) -> None:
@@ -429,12 +706,20 @@ class PepperGateway:
     def _start_bridge_subprocess(self) -> None:
         # ⚠️ 需指定 Py2.7 解释器（pynaoqi 仅 Py2.7）；SDK 环境变量由启动脚本设置
         pepper_dir = os.path.dirname(os.path.abspath(__file__))
-        cmd = [self._py2_exe, "-m", "naoqi_bridge.bridge",
+        bridge_dir = os.path.join(pepper_dir, "naoqi_bridge")
+        bridge_script = os.path.join(bridge_dir, "bridge.py")
+        cmd = [self._py2_exe, bridge_script,
                "--qi-url", os.environ.get("PEPPER_QI_URL", cfg.DEFAULT_QI_URL)]
+        if self._audio_only:
+            cmd.append("--audio-only")
+        if self._allow_gestures:
+            cmd.append("--allow-gestures")
         env = dict(os.environ)
-        env["PYTHONPATH"] = pepper_dir + os.pathsep + env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = os.pathsep.join(
+            (bridge_dir, pepper_dir, env.get("PYTHONPATH", ""))
+        )
         try:
-            self._bridge_proc = subprocess.Popen(cmd, cwd=pepper_dir, env=env)
+            self._bridge_proc = subprocess.Popen(cmd, cwd=bridge_dir, env=env)
             log.info("已拉起 naoqi_bridge 子进程 pid=%s", self._bridge_proc.pid)
         except Exception as exc:
             log.error("拉起 naoqi_bridge 失败: %s", exc)
@@ -484,6 +769,9 @@ def main() -> None:
     ap.add_argument("--device-id", default=cfg.DEVICE_ID)
     ap.add_argument("--ipc-host", default=cfg.DEFAULT_IPC_HOST)
     ap.add_argument("--ipc-port", type=int, default=cfg.DEFAULT_IPC_PORT)
+    ap.add_argument("--audio-only", action="store_true", help="Disable non-whitelisted motion for voice integration")
+    ap.add_argument("--allow-gestures", action="store_true", help="Allow only whitelisted expression animations")
+    ap.add_argument("--test-text", help="Test cloud reply and robot playback without opening microphone")
     ap.add_argument("--auto-bridge", action="store_true",
                     help="自动拉起 Py2.7 naoqi_bridge 子进程（需 --py2-exe）")
     ap.add_argument("--py2-exe", default=cfg.DEFAULT_PY2_EXE,

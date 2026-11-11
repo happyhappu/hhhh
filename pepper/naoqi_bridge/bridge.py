@@ -58,7 +58,9 @@ import audio as audio_mod
 class Pepper(object):
     """self.pepper：云端/MCP 侧看到的实体。所有方法接受 params(dict)。"""
 
-    def __init__(self, session, qi_url):
+    def __init__(self, session, qi_url, audio_only=False, allow_gestures=False):
+        self.audio_only = audio_only
+        self.allow_gestures = allow_gestures
         self.session = session
         self.qi_url = qi_url
         self.pepper_ip = _parse_pepper_ip(qi_url)
@@ -73,6 +75,11 @@ class Pepper(object):
     # ---- 动作原语（对齐 pepper_v1.yaml action_primitives）----
     def emote(self, params):
         return self.motion.emote(params.get("animation", "wave"), params)
+
+    def safe_gesture(self, params):
+        if not self.allow_gestures:
+            raise RuntimeError("Expression gestures are disabled")
+        return self.motion.safe_gesture(params.get("animation"))
 
     def approach(self, params):
         return self.motion.approach(params.get("distance"), params)
@@ -120,6 +127,19 @@ class Pepper(object):
             except Exception:
                 pass
             self._vision_running = False
+        try:
+            tts = self.proxies.get("ALTextToSpeech")
+            if tts is not None:
+                tts.stopAll()
+        except Exception:
+            pass
+        if self.audio_only:
+            if self.allow_gestures:
+                try:
+                    self.motion.stop_safe_gesture()
+                except Exception as exc:
+                    print("[motion] gesture cancel failed: %s" % exc)
+            return {"stopped": True, "audio_only": True}
         return self.motion.stop_all(params)
 
     # ---- 音频/视觉订阅（由 bridge 的 handler 传入 on_frame/on_event）----
@@ -142,6 +162,26 @@ class Pepper(object):
         rate = params.get("rate", 16000)
         channels = params.get("channels", 1)
         return audio_mod.play_audio(pcm, rate, channels, self.session)
+
+    def say_text(self, params):
+        """让 Pepper 使用机载 ALTextToSpeech 直接朗读文本。"""
+        text = params.get("text") or params.get("content") or ""
+        text = text.strip()
+        if not text:
+            return {"spoken": False, "reason": "empty text"}
+        tts = self.proxies.require("ALTextToSpeech")
+        language = params.get("language") or cfg.TTS_LANGUAGE
+        if language:
+            try:
+                tts.setLanguage(language)
+            except Exception as exc:
+                print("[tts] setLanguage(%s) failed: %s" % (language, exc))
+        try:
+            tts.setParameter("speed", int(params.get("speed", cfg.TTS_SPEED)))
+        except Exception:
+            pass
+        tts.say(text)
+        return {"spoken": True, "text": text, "language": language}
 
     def vision_start(self, on_event, params):
         res = self.vision.start(on_event, params)
@@ -246,17 +286,49 @@ class _Handler(socketserver.StreamRequestHandler):
             return
         try:
             pepper = self.server.pepper
+            audio_actions = ("audio_start", "audio_stop", "audio_play", "say_text", "stop_all", "get_status")
+            allowed_gesture = action == "safe_gesture" and pepper.allow_gestures
+            if pepper.audio_only and action not in audio_actions and not allowed_gesture:
+                raise RuntimeError("Action disabled in audio-only mode: %s" % action)
             if action == "audio_start":
                 result = pepper.audio_start(self._make_audio_cb(), params)
                 # 发送线程在首个音频帧入队时惰性启动；此处不放入哨兵
                 self._send({"id": mid, "ok": True, "result": result})
             elif action == "audio_stop":
                 result = pepper.audio_stop(params)
-                self.audio_queue.put(None)   # 通知 sender 线程退出
+                # Keep the sender alive: audio_start will subscribe again for
+                # the next conversation turn on this same IPC connection.
                 self._send({"id": mid, "ok": True, "result": result})
             elif action == "audio_play":
-                result = pepper.audio_play(params)
-                self._send({"id": mid, "ok": True, "result": result})
+                def playback():
+                    try:
+                        result = pepper.audio_play(params)
+                        self._send({"id": mid, "ok": True, "result": result})
+                    except Exception as exc:
+                        self._send({"id": mid, "error": str(exc)})
+                worker = threading.Thread(target=playback)
+                worker.daemon = True
+                worker.start()
+            elif action == "say_text":
+                def speech():
+                    try:
+                        result = pepper.say_text(params)
+                        self._send({"id": mid, "ok": True, "result": result})
+                    except Exception as exc:
+                        self._send({"id": mid, "error": str(exc)})
+                worker = threading.Thread(target=speech)
+                worker.daemon = True
+                worker.start()
+            elif action == "safe_gesture":
+                def gesture():
+                    try:
+                        result = pepper.safe_gesture(params)
+                        self._send({"id": mid, "ok": True, "result": result})
+                    except Exception as exc:
+                        self._send({"id": mid, "error": str(exc)})
+                worker = threading.Thread(target=gesture)
+                worker.daemon = True
+                worker.start()
             elif action == "vision_start":
                 result = pepper.vision_start(self._make_event_cb(), params)
                 self._send({"id": mid, "ok": True, "result": result})
@@ -352,6 +424,8 @@ def main():
     ap.add_argument("--ipc-port", type=int, default=cfg.DEFAULT_IPC_PORT)
     ap.add_argument("--watchdog", type=float, default=cfg.WATCHDOG_TIMEOUT_S,
                     help="主网关心跳超时秒数（> 则自动 stop_all）")
+    ap.add_argument("--audio-only", action="store_true", help="Audio IPC only, except explicitly enabled safe gestures")
+    ap.add_argument("--allow-gestures", action="store_true", help="Allow only whitelisted expression animations")
     args = ap.parse_args()
 
     if sys.version_info[0] != 2:
@@ -362,7 +436,8 @@ def main():
     session.connect(args.qi_url)
     print("[bridge] 已连接 Pepper broker: %s" % args.qi_url)
 
-    pepper = Pepper(session, args.qi_url)
+    pepper = Pepper(session, args.qi_url, audio_only=args.audio_only,
+                    allow_gestures=args.allow_gestures)
     print("[bridge] proxy 可用性: %s" % json.dumps(pepper.proxies.summary()))
 
     server = BridgeServer((args.ipc_host, args.ipc_port), pepper,
@@ -376,7 +451,10 @@ def main():
             pepper.stop_all({})
         except Exception:
             pass
-        server.shutdown()
+        # shutdown() must run outside the serve_forever thread.
+        closer = threading.Thread(target=server.shutdown)
+        closer.daemon = True
+        closer.start()
 
     try:
         signal.signal(signal.SIGINT, _shutdown)

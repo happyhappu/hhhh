@@ -7,7 +7,7 @@ naoqi_bridge 全局配置常量。
 from __future__ import print_function, absolute_import
 
 # ---- 连接 ----
-DEFAULT_QI_URL = "tcp://pepper.local:9559"   # Pepper NAOqi broker
+DEFAULT_QI_URL = "tcp://192.168.0.93:9559"   # Pepper NAOqi broker
 DEFAULT_IPC_HOST = "127.0.0.1"               # 主网关 ↔ 桥 本地 IPC
 DEFAULT_IPC_PORT = 9560
 
@@ -19,6 +19,10 @@ AUDIO_CHANNELS = 1                           # 上行单声道（ASR 只需前�
 #    若实测静音/回声异常，改此值为 1/2/3（后/左/右）或查阅 ALMemory 通道顺序。
 FRONT_MIC_CHANNEL = 0
 AUDIO_DEINTERLEAVE = 0                        # 0=交织；1=分块（buffer 布局随之变化）
+
+# ---- 本机文本朗读 ----
+TTS_LANGUAGE = "Chinese"
+TTS_SPEED = 90                                  # NAOqi 相对速度参数（百分比）
 
 # ---- 运动安全（对齐 pepper_v1.yaml safety）----
 MAX_MOVE_SPEED = 0.4          # m/s，三轮底盘物理上限（yaml: speed_limit_mps）

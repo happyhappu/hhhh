@@ -58,7 +58,7 @@ python2.7 bridge.py --qi-url tcp://192.168.31.<pepper-ip>:9559
     `patrol`{points,loops,speed} /
     `tablet_render`{url} / `tablet_clear`{} /
     `posture`{name} / `head_nod`{} / `head_shake`{} /
-    `audio_start`{} / `audio_stop`{} /
+    `audio_start`{} / `audio_stop`{} / `say_text`{text,language,speed} /
     `vision_start`{} / `vision_stop`{} /
     `stop_all`{} / `get_status`{}
 - 上行（桥 → 主网关）：
@@ -84,6 +84,7 @@ python2.7 bridge.py --qi-url tcp://192.168.31.<pepper-ip>:9559
 | `get_status` | ALRobotPosture/ALMemory | 姿态/电量/连接 |
 | `audio_start/stop` | `audio.py` / ALAudioDevice | 麦克风订阅（前麦 16k 单声道） |
 | `audio_play` | `audio.py` / ALAudioPlayer | 云端 TTS PCM → 封装 WAV → 扬声器外放（禁用内置 TTS，改 GPT-SoVITS） |
+| `say_text` | `ALTextToSpeech` | 主网关发送文本，由 Pepper 本机直接朗读；不传输云端 TTS 音频 |
 | `vision_start/stop` | `vision.py` / ALMemory 事件 | 人脸/人体感知上抛 |
 
 ## 安全与降级
@@ -92,7 +93,7 @@ python2.7 bridge.py --qi-url tcp://192.168.31.<pepper-ip>:9559
 - **失联看门狗**：主网关 > `WATCHDOG_TIMEOUT_S=15s` 无心跳 → 自动 `stop_all`（ADR-011 §决策3）。
 - **Proxy 降级**：`proxies.py` 探测时若某 proxy `service not found`（如 ALNavigation/ALTracker），记 None 并优雅降级，不阻塞主流程。
 - **急停链路**：`stop_all` 先退订音频/视觉，再 `killAllTasks` + `rest()`（去刚度）；机身倾斜由 NAOqi 硬件跌倒保护兜底。
-- **禁用云端服务**：Pepper 内置 ALSpeechRecognition/ALTextToSpeech/ALDialog/ALAutonomousLife 不实例化（对话/意图/音色全走云端），见 `pepper_v1.yaml` `disabled_cloud_services`。
+- **本机朗读**：对话文本通过 `say_text` 调用 `ALTextToSpeech`；麦克风识别和对话仍走云端。禁用 ALSpeechRecognition/ALDialog/ALAutonomousLife。
 
 ## 当前状态与 TODO（真机验证前）
 

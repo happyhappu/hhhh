@@ -10,6 +10,7 @@
 """
 from __future__ import print_function, absolute_import
 
+import threading
 import config as cfg
 
 
@@ -23,11 +24,62 @@ _ANIM_MAP = {
     "excited": "animations/Stand/Emotions/Positive/Excited_1",
 }
 
+# The user's approved Stand animations. No path outside this list can be
+# executed through the audio-only gesture channel.
+SAFE_GESTURES = {
+    "wave": "animations/Stand/Gestures/Hey_1",
+    "nod_yes": "animations/Stand/Gestures/Yes_1",
+    "shake_no": "animations/Stand/Gestures/No_1",
+    "bow": "animations/Stand/Gestures/BowShort_1",
+    "thinking": "animations/Stand/Gestures/Thinking_1",
+    "show_sky": "animations/Stand/Gestures/ShowSky_1",
+    "show_floor": "animations/Stand/Gestures/ShowFloor_1",
+    "show_tablet": "animations/Stand/Gestures/ShowTablet_3",
+    "please": "animations/Stand/Gestures/Please_1",
+    "me": "animations/Stand/Gestures/Me_7",
+    "calm_down": "animations/Stand/Gestures/CalmDown_1",
+    "happy": "animations/Stand/Emotions/Positive/Happy_4",
+    "shy": "animations/Stand/Emotions/Neutral/Embarrassed_1",
+    # This robot stores BodyTalk_1 under Speaking/, not directly in BodyTalk/.
+    "body_talk": "animations/Stand/BodyTalk/Speaking/BodyTalk_1",
+    "dont_know": "animations/Stand/Gestures/IDontKnow_1",
+    "bored": "animations/Stand/Emotions/Negative/Bored_1",
+}
+
 
 class MotionController(object):
 
     def __init__(self, proxies):
         self.p = proxies
+        self._safe_gesture_lock = threading.Lock()
+        self._gesture_future_lock = threading.Lock()
+        self._gesture_future = None
+
+    def safe_gesture(self, name):
+        """Play an explicitly approved animation; never fall back to motion."""
+        behavior = SAFE_GESTURES.get((name or "").lower())
+        if not behavior:
+            raise ValueError("gesture not in approved list")
+        if not self._safe_gesture_lock.acquire(False):
+            return {"played": False, "reason": "gesture_busy"}
+        try:
+            # The official NAOqi async form supports cancelling the specific
+            # animation on shutdown/watchdog without relaxing robot motors.
+            with self._gesture_future_lock:
+                future = self.p.require("ALAnimationPlayer").run(behavior, _async=True)
+                self._gesture_future = future
+            future.value()
+            return {"played": True, "animation": behavior}
+        finally:
+            with self._gesture_future_lock:
+                self._gesture_future = None
+            self._safe_gesture_lock.release()
+
+    def stop_safe_gesture(self):
+        with self._gesture_future_lock:
+            future = self._gesture_future
+            if future is not None:
+                future.cancel()
 
     # ---- 表情/动画 ----
     def emote(self, animation="wave", params=None):

@@ -3,10 +3,10 @@
 #
 # 必装：
 websocket-client>=1.3.0     # 连云端 xiaozhi-esp32-server WS（音频/意图双向）
+opuslib>=3.0.1              # 默认 opus 音频编码；Windows 还需可加载的 opus.dll
 
-# 可选（仅当 AUDIO_FORMAT=opus 时必需；默认 opus）：
-#   opuslib>=2.0.0          # opus 编解码（纯 ctypes 包装，需下方系统库）
-#   另需在系统/网关机安装 libopus（Linux: libopus0；Windows: libopus.dll 置于 PATH）
+# 系统库（默认 AUDIO_FORMAT=opus 时必需）：
+#   Windows: opus.dll 置于 PATH；Linux: 安装 libopus0。
 # 若改用零依赖模式：设环境变量 PEPPER_AUDIO_FORMAT=raw（需 xiaozhi-server 支持 raw PCM）。
 
 # 注意：本主网关不依赖 pynaoqi（那是 naoqi_bridge 子进程的 Py2.7 依赖，

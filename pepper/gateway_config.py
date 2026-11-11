@@ -9,7 +9,7 @@ import os
 
 # ---- 云端 xiaozhi-esp32-server WS（与 Otto/Reachy 同协议）----
 # ⚠️ 端点路径 /xiaozhi/v1 依所部署 server 版本；若 server 用 /xiaozhi 请改。
-DEFAULT_CLOUD_WS = os.environ.get("SUIYUE_CLOUD_WS", "ws://192.168.31.10:8000/xiaozhi/v1")
+DEFAULT_CLOUD_WS = os.environ.get("SUIYUE_CLOUD_WS", "ws://192.168.0.87:8000/xiaozhi/v1")
 XIAOZHI_PROTOCOL_VERSION = "1.0.0"
 
 # ---- 本地 naoqi_bridge IPC（127.0.0.1:9560 JSON 行）----
@@ -17,7 +17,7 @@ DEFAULT_IPC_HOST = "127.0.0.1"
 DEFAULT_IPC_PORT = 9560
 
 # ---- Pepper broker（仅 --auto-bridge 拉起子进程时用到）----
-DEFAULT_QI_URL = os.environ.get("PEPPER_QI_URL", "tcp://pepper.local:9559")
+DEFAULT_QI_URL = os.environ.get("PEPPER_QI_URL", "tcp://192.168.0.93:9559")
 
 # ---- 设备 ----
 DEVICE_ID = os.environ.get("PEPPER_DEVICE_ID", "pepper-01")
@@ -32,6 +32,8 @@ AUDIO_FRAME_DURATION_MS = 60
 # ⚠️ 默认 opus（最贴近现有 Otto/Reachy 链路）；若 server 不支持 opus 且支持 raw，
 #    设 PEPPER_AUDIO_FORMAT=raw 即可零依赖运行。
 AUDIO_FORMAT = os.environ.get("PEPPER_AUDIO_FORMAT", "opus")
+# 1 = Pepper 通过 ALTextToSpeech 本机朗读文本，不播放云端 TTS 二进制音频。
+LOCAL_TTS = os.environ.get("PEPPER_LOCAL_TTS", "1").lower() not in ("0", "false", "no")
 OPUS_APPLICATION = "voip"
 OPUS_FRAME_SAMPLES = AUDIO_RATE * AUDIO_FRAME_DURATION_MS // 1000  # 960 @16k/60ms
 
@@ -41,6 +43,34 @@ HEARTBEAT_INTERVAL_S = 5.0
 # ---- VAD（麦克风能量检测，控制 xiaozhi listen start/stop）----
 VAD_SILENCE_MS = 800                       # 连续静音超过此值 -> listen stop
 VAD_ENERGY_THRESHOLD = 300                 # int16 RMS 阈值（0-32767），低于=静音
+
+# The brain's Silero VAD decides when the speaker stopped (500 ms configured
+# there).  Reopen the physical microphone after the robot's speech tail.
+MIC_RESUME_DELAY_S = 0.8
+TURN_TIMEOUT_S = 90.0
+GESTURE_COOLDOWN_S = 8.0
+
+# The exact animations are whitelisted by the Python 2 NAOqi bridge.  Neutral
+# replies intentionally have no motion; no mapping enables driving/navigation.
+SERVER_EMOTION_TO_GESTURE = {
+    'happy': 'wave', 'laughing': 'happy', 'funny': 'happy',
+    'silly': 'body_talk', 'loving': 'bow', 'kissy': 'bow',
+    'crying': 'calm_down', 'sad': 'calm_down', 'angry': 'calm_down',
+    'relaxed': 'calm_down', 'sleepy': 'bored',
+    'surprised': 'show_sky', 'shocked': 'show_floor',
+    'thinking': 'thinking', 'confused': 'dont_know',
+    'embarrassed': 'shy', 'winking': 'nod_yes',
+    'cool': 'me', 'confident': 'me', 'delicious': 'please',
+    'neutral': None,
+}
+SERVER_EMOTION_TO_EMOJI = {
+    'funny': '😂', 'crying': '😭', 'angry': '😠', 'sad': '😔',
+    'loving': '😍', 'surprised': '😲', 'shocked': '😱', 'thinking': '🤔',
+    'relaxed': '😌', 'sleepy': '😴', 'silly': '😜', 'confused': '🙄',
+    'neutral': '😶', 'happy': '🙂', 'laughing': '😆', 'embarrassed': '😳',
+    'winking': '😉', 'cool': '😎', 'delicious': '🤤', 'kissy': '😘',
+    'confident': '😏',
+}
 
 # ---- emotion -> Pepper 动作原语（对齐 pepper_v1.yaml emotion_mapping）----
 # 云端 LLM 输出 emotion 后，主网关据此映射成 naoqi_bridge 能执行的动作原语。
